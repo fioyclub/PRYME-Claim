@@ -8,9 +8,7 @@ import json
 import io
 from datetime import datetime
 from typing import Dict, List, Optional, Any
-from google.oauth2 import service_account
-from google.oauth2.credentials import Credentials as OAuthCredentials
-from google.auth.credentials import Credentials
+from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaIoBaseUpload
@@ -21,24 +19,20 @@ logger = logging.getLogger(__name__)
 class DriveClient:
     """Client for Google Drive API operations"""
     
-    def __init__(self, credentials_json: Optional[str] = None, token_json: Optional[str] = None, 
-                 root_folder_id: Optional[str] = None):
+    def __init__(self, root_folder_id: Optional[str] = None):
         """
-        Initialize Google Drive client
+        Initialize Google Drive client with OAuth credentials
         
         Args:
-            credentials_json: Service account credentials as JSON string (legacy)
-            token_json: OAuth token as JSON string (preferred)
             root_folder_id: Optional root folder ID for organizing files
         """
         self.root_folder_id = root_folder_id
         self._service = None
-        self._credentials = self._create_credentials(credentials_json, token_json)
+        self._credentials = self._create_oauth_credentials()
         self._folder_cache = {}  # Cache folder IDs to avoid repeated API calls
-        self._use_oauth = bool(token_json)  # Flag to indicate OAuth vs Service Account
         
-    def _create_credentials(self, credentials_json: Optional[str], token_json: Optional[str]) -> Credentials:
-        """Create Google credentials (OAuth preferred, Service Account as fallback)"""
+    def _create_oauth_credentials(self) -> Credentials:
+        """Create Google OAuth 2.0 user credentials from token.json file"""
         # Define scopes for both Drive and Sheets access
         scopes = [
             'https://www.googleapis.com/auth/drive.file',
@@ -46,27 +40,16 @@ class DriveClient:
         ]
         
         try:
-            if token_json:
-                # Use OAuth 2.0 user credentials (preferred)
-                logger.info("Using OAuth 2.0 user credentials for Google Drive")
-                token_dict = json.loads(token_json)
-                credentials = OAuthCredentials.from_authorized_user_info(token_dict, scopes)
-                return credentials
-            elif credentials_json:
-                # Fallback to Service Account credentials (legacy)
-                logger.info("Using Service Account credentials for Google Drive")
-                credentials_dict = json.loads(credentials_json)
-                credentials = service_account.Credentials.from_service_account_info(
-                    credentials_dict,
-                    scopes=scopes
-                )
-                return credentials
-            else:
-                raise ValueError("Either token_json or credentials_json must be provided")
-                
-        except (json.JSONDecodeError, ValueError) as e:
-            logger.error(f"Failed to create credentials: {e}")
-            raise ValueError(f"Invalid Google credentials: {e}")
+            logger.info("Loading OAuth 2.0 user credentials from token.json")
+            credentials = Credentials.from_authorized_user_file("token.json", scopes)
+            logger.info("Successfully loaded OAuth credentials for Google Drive")
+            return credentials
+        except FileNotFoundError:
+            logger.error("token.json file not found. Make sure GOOGLE_TOKEN_JSON environment variable is set.")
+            raise ValueError("token.json file not found. Check GOOGLE_TOKEN_JSON environment variable.")
+        except Exception as e:
+            logger.error(f"Failed to create OAuth credentials: {e}")
+            raise ValueError(f"Invalid OAuth credentials: {e}")
     
     def _get_service(self):
         """Get or create Google Drive service instance"""
@@ -265,24 +248,13 @@ class DriveClient:
                 resumable=True
             )
             
-            # Upload file using appropriate method based on credential type
-            if self._use_oauth:
-                # OAuth user credentials - upload directly to user's Drive
-                logger.info(f"Uploading {filename} using OAuth user credentials to personal Drive")
-                file = service.files().create(
-                    body=file_metadata,
-                    media_body=media,
-                    fields='id'
-                ).execute()
-            else:
-                # Service Account credentials - use shared drive approach
-                logger.info(f"Uploading {filename} using Service Account to shared folder")
-                file = service.files().create(
-                    body=file_metadata,
-                    media_body=media,
-                    fields='id',
-                    supportsAllDrives=True
-                ).execute()
+            # Upload file using OAuth user credentials to personal Drive
+            logger.info(f"Uploading {filename} using OAuth user credentials to personal Drive")
+            file = service.files().create(
+                body=file_metadata,
+                media_body=media,
+                fields='id'
+            ).execute()
             
             file_id = file.get('id')
             logger.info(f"Uploaded photo {filename} with ID: {file_id} to shared folder: {target_folder_id}")
@@ -293,19 +265,10 @@ class DriveClient:
                     'role': 'reader',
                     'type': 'anyone'
                 }
-                if self._use_oauth:
-                    # OAuth user credentials - standard permission setting
-                    service.permissions().create(
-                        fileId=file_id,
-                        body=permission
-                    ).execute()
-                else:
-                    # Service Account credentials - use supportsAllDrives
-                    service.permissions().create(
-                        fileId=file_id,
-                        body=permission,
-                        supportsAllDrives=True
-                    ).execute()
+                service.permissions().create(
+                    fileId=file_id,
+                    body=permission
+                ).execute()
                 logger.info(f"Set public read permissions for file {file_id}")
             except HttpError as perm_error:
                 logger.warning(f"Could not set public permissions for file {file_id}: {perm_error}")
@@ -391,15 +354,13 @@ class DriveClient:
             
             service.permissions().create(
                 fileId=file_id,
-                body=permission,
-                supportsAllDrives=True
+                body=permission
             ).execute()
             
             # Get file info to construct shareable link
             file_info = service.files().get(
                 fileId=file_id,
-                fields='webViewLink',
-                supportsAllDrives=True
+                fields='webViewLink'
             ).execute()
             
             shareable_link = file_info.get('webViewLink')
