@@ -9,6 +9,7 @@ import io
 from datetime import datetime
 from typing import Dict, List, Optional, Any
 from google.oauth2 import service_account
+from google.oauth2.credentials import Credentials as OAuthCredentials
 from google.auth.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
@@ -20,29 +21,49 @@ logger = logging.getLogger(__name__)
 class DriveClient:
     """Client for Google Drive API operations"""
     
-    def __init__(self, credentials_json: str, root_folder_id: Optional[str] = None):
+    def __init__(self, credentials_json: Optional[str] = None, token_json: Optional[str] = None, 
+                 root_folder_id: Optional[str] = None):
         """
         Initialize Google Drive client
         
         Args:
-            credentials_json: Service account credentials as JSON string
+            credentials_json: Service account credentials as JSON string (legacy)
+            token_json: OAuth token as JSON string (preferred)
             root_folder_id: Optional root folder ID for organizing files
         """
         self.root_folder_id = root_folder_id
         self._service = None
-        self._credentials = self._create_credentials(credentials_json)
+        self._credentials = self._create_credentials(credentials_json, token_json)
         self._folder_cache = {}  # Cache folder IDs to avoid repeated API calls
-        self._use_shared_drive = True  # Flag to use shared drive approach
+        self._use_oauth = bool(token_json)  # Flag to indicate OAuth vs Service Account
         
-    def _create_credentials(self, credentials_json: str) -> Credentials:
-        """Create Google service account credentials"""
+    def _create_credentials(self, credentials_json: Optional[str], token_json: Optional[str]) -> Credentials:
+        """Create Google credentials (OAuth preferred, Service Account as fallback)"""
+        # Define scopes for both Drive and Sheets access
+        scopes = [
+            'https://www.googleapis.com/auth/drive.file',
+            'https://www.googleapis.com/auth/spreadsheets'
+        ]
+        
         try:
-            credentials_dict = json.loads(credentials_json)
-            credentials = service_account.Credentials.from_service_account_info(
-                credentials_dict,
-                scopes=['https://www.googleapis.com/auth/drive']
-            )
-            return credentials
+            if token_json:
+                # Use OAuth 2.0 user credentials (preferred)
+                logger.info("Using OAuth 2.0 user credentials for Google Drive")
+                token_dict = json.loads(token_json)
+                credentials = OAuthCredentials.from_authorized_user_info(token_dict, scopes)
+                return credentials
+            elif credentials_json:
+                # Fallback to Service Account credentials (legacy)
+                logger.info("Using Service Account credentials for Google Drive")
+                credentials_dict = json.loads(credentials_json)
+                credentials = service_account.Credentials.from_service_account_info(
+                    credentials_dict,
+                    scopes=scopes
+                )
+                return credentials
+            else:
+                raise ValueError("Either token_json or credentials_json must be provided")
+                
         except (json.JSONDecodeError, ValueError) as e:
             logger.error(f"Failed to create credentials: {e}")
             raise ValueError(f"Invalid Google credentials: {e}")
@@ -244,52 +265,51 @@ class DriveClient:
                 resumable=True
             )
             
-            # Upload file to the shared folder
-            # Try different approaches to avoid Service Account storage quota issue
-            try:
-                # First attempt: Try with supportsAllDrives for shared drives
+            # Upload file using appropriate method based on credential type
+            if self._use_oauth:
+                # OAuth user credentials - upload directly to user's Drive
+                logger.info(f"Uploading {filename} using OAuth user credentials to personal Drive")
+                file = service.files().create(
+                    body=file_metadata,
+                    media_body=media,
+                    fields='id'
+                ).execute()
+            else:
+                # Service Account credentials - use shared drive approach
+                logger.info(f"Uploading {filename} using Service Account to shared folder")
                 file = service.files().create(
                     body=file_metadata,
                     media_body=media,
                     fields='id',
                     supportsAllDrives=True
                 ).execute()
-            except HttpError as e:
-                if 'storageQuotaExceeded' in str(e) and 'Service Accounts do not have storage quota' in str(e):
-                    logger.warning(f"Service Account quota issue, trying alternative method...")
-                    # Alternative: Try to copy/move approach or use different API method
-                    # This is a fundamental limitation - Service Account cannot own files
-                    # The folder owner needs to be the one creating files
-                    raise ValueError(
-                        f"无法使用Service Account直接上传文件。\n"
-                        f"Service Account没有存储配额，无法拥有文件。\n"
-                        f"建议解决方案：\n"
-                        f"1. 使用OAuth 2.0用户凭据而不是Service Account\n"
-                        f"2. 或者设置Domain-wide Delegation\n"
-                        f"3. 或者使用Google Shared Drives (团队云端硬盘)"
-                    )
-                else:
-                    raise
             
             file_id = file.get('id')
             logger.info(f"Uploaded photo {filename} with ID: {file_id} to shared folder: {target_folder_id}")
             
             # Set file permissions to make it viewable by anyone with the link
-            # This ensures the file can be accessed via the shareable link
             try:
                 permission = {
                     'role': 'reader',
                     'type': 'anyone'
                 }
-                service.permissions().create(
-                    fileId=file_id,
-                    body=permission,
-                    supportsAllDrives=True
-                ).execute()
+                if self._use_oauth:
+                    # OAuth user credentials - standard permission setting
+                    service.permissions().create(
+                        fileId=file_id,
+                        body=permission
+                    ).execute()
+                else:
+                    # Service Account credentials - use supportsAllDrives
+                    service.permissions().create(
+                        fileId=file_id,
+                        body=permission,
+                        supportsAllDrives=True
+                    ).execute()
                 logger.info(f"Set public read permissions for file {file_id}")
             except HttpError as perm_error:
                 logger.warning(f"Could not set public permissions for file {file_id}: {perm_error}")
-                # Continue anyway - the file might still be accessible through the shared folder
+                # Continue anyway - the file might still be accessible
             
             return file_id
             
