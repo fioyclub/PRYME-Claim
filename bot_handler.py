@@ -78,31 +78,31 @@ class TelegramBot:
         try:
             logger.info(f"Starting webhook on {webhook_url}:{port}")
             
+            # Initialize and start the application
             await self.application.initialize()
             await self.application.start()
             
             # Set webhook
             await self.application.bot.set_webhook(url=webhook_url)
+            logger.info(f"Webhook set to: {webhook_url}")
             
-            # Start webhook server with health check support
-            from flask import Flask, jsonify
+            # Start Flask server for health check and webhook handling
+            from flask import Flask, request, jsonify
             import time
+            import threading
             
-            # Create Flask app for webhook and health check
             app = Flask(__name__)
             start_time = time.time()
             health_check_count = 0
             
             @app.route('/health')
             def health_check():
-                """Health check endpoint for monitoring - optimized for 10-minute intervals"""
+                """Health check endpoint for monitoring"""
                 nonlocal health_check_count
                 health_check_count += 1
                 
                 uptime_seconds = time.time() - start_time
                 uptime_hours = uptime_seconds / 3600
-                
-                # Format uptime in human readable format
                 hours, remainder = divmod(int(uptime_seconds), 3600)
                 minutes, seconds = divmod(remainder, 60)
                 uptime_human = f"{hours}h {minutes}m {seconds}s" if hours > 0 else f"{minutes}m {seconds}s"
@@ -120,35 +120,29 @@ class TelegramBot:
                     'deployment': 'render_production'
                 }), 200
             
-            @app.route('/status')
-            def status_check():
-                """Detailed status endpoint for debugging"""
-                uptime_seconds = time.time() - start_time
-                return jsonify({
-                    'service': 'telegram-claim-bot',
-                    'status': 'running',
-                    'mode': 'webhook',
-                    'timestamp': time.time(),
-                    'start_time': start_time,
-                    'uptime_seconds': uptime_seconds,
-                    'health_checks_total': health_check_count,
-                    'webhook_url': webhook_url,
-                    'port': port,
-                    'version': '1.0.0'
-                }), 200
+            @app.route('/', methods=['POST'])
+            def webhook():
+                """Handle incoming webhook updates from Telegram"""
+                try:
+                    update_data = request.get_json()
+                    if update_data:
+                        from telegram import Update
+                        import asyncio
+                        
+                        # Create update object and process it
+                        update = Update.de_json(update_data, self.application.bot)
+                        
+                        # Process update asynchronously
+                        asyncio.create_task(self.application.process_update(update))
+                    
+                    return '', 200
+                except Exception as e:
+                    logger.error(f"Webhook processing error: {e}")
+                    return '', 500
             
-            # Start webhook server - simplified approach for python-telegram-bot 20.7
-            import asyncio
-            
-            # Start the webhook using the application's built-in method
-            webserver = self.application.run_webhook(
-                listen="0.0.0.0",
-                port=port,
-                webhook_url=webhook_url
-            )
-            
-            # Keep running
-            await webserver
+            # Run Flask app
+            logger.info(f"Starting Flask server on port {port}")
+            app.run(host='0.0.0.0', port=port, debug=False)
             
         except Exception as e:
             logger.error(f"Failed to start webhook: {e}")
@@ -158,7 +152,25 @@ class TelegramBot:
         """Start polling for development"""
         try:
             logger.info("Starting polling mode")
-            await self.application.run_polling()
+            
+            # Initialize and start the application
+            await self.application.initialize()
+            await self.application.start()
+            
+            # Start polling
+            await self.application.updater.start_polling()
+            
+            # Keep running
+            import asyncio
+            try:
+                while True:
+                    await asyncio.sleep(1)
+            except KeyboardInterrupt:
+                logger.info("Polling stopped by user")
+            finally:
+                await self.application.updater.stop()
+                await self.application.stop()
+                await self.application.shutdown()
             
         except Exception as e:
             logger.error(f"Failed to start polling: {e}")
