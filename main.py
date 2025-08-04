@@ -28,13 +28,13 @@ async def initialize_google_clients(config: Config):
         
         # Initialize Google Sheets client
         sheets_client = SheetsClient(
-            credentials_dict=config.get_google_credentials_dict(),
+            credentials_json=config.GOOGLE_CREDENTIALS_JSON,
             spreadsheet_id=config.GOOGLE_SPREADSHEET_ID
         )
         
         # Initialize Google Drive client
         drive_client = DriveClient(
-            credentials_dict=config.get_google_credentials_dict(),
+            credentials_json=config.GOOGLE_CREDENTIALS_JSON,
             root_folder_id=config.GOOGLE_DRIVE_FOLDER_ID
         )
         
