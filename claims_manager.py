@@ -345,7 +345,7 @@ class ClaimsManager:
     
     def upload_receipt(self, user_id: int, photo_data: bytes, category: str) -> str:
         """
-        Upload receipt photo to Google Drive.
+        Upload receipt photo to Google Drive shared folder and get shareable link.
         
         Args:
             user_id: Telegram user ID
@@ -358,14 +358,18 @@ class ClaimsManager:
         try:
             timestamp = datetime.now()
             
-            # Use DriveClient's sync upload method
-            filename = f"receipt_{user_id}_{timestamp}.jpg"
-            # For simplicity, upload to root folder (can be enhanced later)
-            shareable_link = self.drive_client._upload_photo_sync(
+            # Generate filename with timestamp and category for better organization
+            filename = f"receipt_{user_id}_{category}_{timestamp.strftime('%Y%m%d_%H%M%S')}.jpg"
+            
+            # Upload to shared folder (not service account's drive)
+            file_id = self.drive_client._upload_photo_sync(
                 photo_data, filename, self.drive_client.root_folder_id
             )
             
-            logger.info(f"Successfully uploaded receipt for user {user_id}, category {category}")
+            # Get shareable link for the uploaded file
+            shareable_link = self.drive_client._get_shareable_link_sync(file_id)
+            
+            logger.info(f"Successfully uploaded receipt for user {user_id}, category {category}, link: {shareable_link}")
             return shareable_link
             
         except Exception as e:
