@@ -382,14 +382,25 @@ class UserManager:
             )
             
             # Save to Google Sheets
-            values = [
-                registration.telegram_user_id,
-                registration.name,
-                registration.phone,
-                registration.role.value,
-                registration.register_date.strftime('%Y-%m-%d %H:%M:%S')
-            ]
-            success = self.sheets_client._append_data_sync(role, [values], 'A:E')
+            user_data = {
+                'telegram_user_id': registration.telegram_user_id,
+                'name': registration.name,
+                'phone': registration.phone,
+                'role': registration.role.value,
+                'register_date': registration.register_date.strftime('%Y-%m-%d %H:%M:%S')
+            }
+            
+            # Use asyncio to run the async method
+            import asyncio
+            try:
+                loop = asyncio.get_event_loop()
+            except RuntimeError:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+            
+            success = loop.run_until_complete(
+                self.sheets_client.append_registration_data(registration.role.value, user_data)
+            )
             
             if not success:
                 logger.error("Failed to save registration data for user %d", user_id)
