@@ -12,7 +12,7 @@ from models import UserRegistration, UserRole, UserStateType
 from state_manager import StateManager
 from sheets_client import SheetsClient
 from validation import (
-    validate_name, validate_phone_number, validate_telegram_user_id,
+    validate_name, validate_phone_number, validate_telegram_user_id_legacy,
     get_validation_help_message
 )
 from validation_helper import (
@@ -58,7 +58,7 @@ class UserManager:
         """
         try:
             # Validate user ID
-            is_valid, error_msg = validate_telegram_user_id(user_id)
+            is_valid, error_msg = validate_telegram_user_id_legacy(user_id)
             if not is_valid:
                 logger.warning("Invalid user ID %s: %s", user_id, error_msg)
                 return False
@@ -86,7 +86,7 @@ class UserManager:
         """
         try:
             # Validate user ID
-            is_valid, error_msg = validate_telegram_user_id(user_id)
+            is_valid, error_msg = validate_telegram_user_id_legacy(user_id)
             if not is_valid:
                 logger.warning("Invalid user ID %s: %s", user_id, error_msg)
                 return None
@@ -114,7 +114,7 @@ class UserManager:
             logger.error("Error getting user data for %d: %s", user_id, e)
             return None
     
-    async def start_registration(self, user_id: int) -> Dict[str, Any]:
+    def start_registration(self, user_id: int) -> Dict[str, Any]:
         """
         Start the registration process for a user.
         
@@ -126,7 +126,7 @@ class UserManager:
         """
         try:
             # Validate user ID
-            is_valid, error_msg = validate_telegram_user_id(user_id)
+            is_valid, error_msg = validate_telegram_user_id_legacy(user_id)
             if not is_valid:
                 logger.warning("Cannot start registration for invalid user ID %s: %s", 
                              user_id, error_msg)
