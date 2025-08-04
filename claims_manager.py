@@ -401,11 +401,11 @@ class ClaimsManager:
             # Submit to Google Sheets (using sync method)
             claim_dict = claim.to_dict()
             values = [
-                claim_dict['user_id'],
+                claim_dict['date'],
                 claim_dict['category'],
                 claim_dict['amount'],
                 claim_dict['receipt_link'],
-                claim_dict['submit_date'],
+                claim_dict['submitted_by'],
                 claim_dict['status']
             ]
             success = self.sheets_client._append_data_sync('Claims', [values], 'A:F')
