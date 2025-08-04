@@ -25,15 +25,23 @@ def initialize_google_clients(config: Config):
     try:
         logger.info("Initializing Google API clients...")
         
+        # Create token.json file if GOOGLE_TOKEN_JSON is provided
+        if config.GOOGLE_TOKEN_JSON:
+            logger.info("Creating token.json file from environment variable")
+            with open("token.json", "w") as f:
+                f.write(config.GOOGLE_TOKEN_JSON)
+        
         # Initialize Google Sheets client
         sheets_client = SheetsClient(
             credentials_json=config.GOOGLE_CREDENTIALS_JSON,
+            token_json=config.GOOGLE_TOKEN_JSON,
             spreadsheet_id=config.GOOGLE_SPREADSHEET_ID
         )
         
         # Initialize Google Drive client
         drive_client = DriveClient(
             credentials_json=config.GOOGLE_CREDENTIALS_JSON,
+            token_json=config.GOOGLE_TOKEN_JSON,
             root_folder_id=config.GOOGLE_DRIVE_FOLDER_ID
         )
         
