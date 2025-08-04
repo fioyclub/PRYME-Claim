@@ -7,7 +7,7 @@ import logging
 from typing import Optional
 from telegram import Update, Bot
 from telegram.ext import Updater, CommandHandler, MessageHandler, CallbackQueryHandler, Filters
-from telegram.constants import ParseMode
+from telegram import ParseMode
 
 from user_manager import UserManager
 from claims_manager import ClaimsManager
