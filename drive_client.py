@@ -40,7 +40,7 @@ class DriveClient:
             credentials_dict = json.loads(credentials_json)
             credentials = service_account.Credentials.from_service_account_info(
                 credentials_dict,
-                scopes=['https://www.googleapis.com/auth/drive.file']
+                scopes=['https://www.googleapis.com/auth/drive']
             )
             return credentials
         except (json.JSONDecodeError, ValueError) as e:
@@ -224,15 +224,18 @@ class DriveClient:
                 'name': filename
             }
             
-            # Always upload to the specified shared folder
+            # Always upload to the specified shared folder (user's personal Drive)
             # This folder should be owned by a user account with storage quota
-            # and shared with the service account
+            # and shared with the service account with Editor permissions
             target_folder_id = folder_id or self.root_folder_id
             
             if not target_folder_id:
                 raise ValueError("No target folder specified. Please set GOOGLE_DRIVE_FOLDER_ID environment variable.")
             
+            # Force upload to the shared folder - never upload to service account's root
             file_metadata['parents'] = [target_folder_id]
+            
+            logger.info(f"Uploading {filename} to shared folder {target_folder_id} (not service account drive)")
             
             # Create media upload object
             media = MediaIoBaseUpload(
@@ -274,12 +277,20 @@ class DriveClient:
             # Provide more specific error messages based on the error type
             if e.resp.status == 403:
                 if 'storageQuotaExceeded' in str(e):
-                    error_msg = (
-                        f"存储配额已满。解决方案：\n"
-                        f"1. 请确保文件夹 {target_folder_id} 属于有存储空间的用户账号\n"
-                        f"2. 该文件夹需要与Service Account共享并给予编辑权限\n"
-                        f"3. 检查文件夹所有者的Google Drive存储空间是否充足"
-                    )
+                    if 'Service Accounts do not have storage quota' in str(e):
+                        error_msg = (
+                            f"Service Account没有存储配额。当前设置：\n"
+                            f"- 目标文件夹: {target_folder_id}\n"
+                            f"- Service Account: telegram-bot-service@pryme-468004.iam.gserviceaccount.com\n"
+                            f"请确认文件夹已正确共享给Service Account并设为编辑者权限。"
+                        )
+                    else:
+                        error_msg = (
+                            f"存储配额已满。解决方案：\n"
+                            f"1. 请确保文件夹 {target_folder_id} 属于有存储空间的用户账号\n"
+                            f"2. 该文件夹需要与Service Account共享并给予编辑权限\n"
+                            f"3. 检查文件夹所有者的Google Drive存储空间是否充足"
+                        )
                 elif 'insufficientFilePermissions' in str(e):
                     error_msg = (
                         f"权限不足。解决方案：\n"
