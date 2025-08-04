@@ -318,7 +318,7 @@ class TelegramBot:
             
             else:
                 logger.warning(f"Unknown callback data: {callback_data}")
-                query.edit_message_text("未知的操作，请重新开始。")
+                self._safe_edit_message(query, "未知的操作，请重新开始。")
                 
         except Exception as e:
             logger.error(f"Error handling callback query: {e}")
@@ -432,56 +432,51 @@ class TelegramBot:
     def _handle_role_callback(self, query, callback_data, current_state, temp_data):
         """Handle role selection callback"""
         if current_state != UserStateType.REGISTERING_ROLE:
-            query.edit_message_text("请先使用 /register 命令开始注册。")
+            self._safe_edit_message(query, "请先使用 /register 命令开始注册。")
             return
         
         role = callback_data.replace('role_', '')
+        # Map callback role to UserRole enum value
+        role_mapping = {
+            'staff': 'Staff',
+            'manager': 'Manager', 
+            'admin': 'Admin'
+        }
+        mapped_role = role_mapping.get(role, role)
         result = self.user_manager.process_registration_step(
-            query.from_user.id, 'role', role
+            query.from_user.id, 'role', mapped_role
         )
         
         if result['success']:
             keyboard = KeyboardBuilder.claim_complete_keyboard() if result.get('user_data') else None
-            query.edit_message_text(
-                result['message'],
-                reply_markup=keyboard
-            )
+            self._safe_edit_message(query, result['message'], keyboard)
         else:
             keyboard = KeyboardBuilder.role_selection_keyboard() if result.get('show_role_keyboard') else None
-            query.edit_message_text(
-                result['message'],
-                reply_markup=keyboard
-            )
+            self._safe_edit_message(query, result['message'], keyboard)
     
     def _handle_category_callback(self, query, callback_data, current_state, temp_data):
         """Handle category selection callback"""
         if current_state != UserStateType.CLAIMING_CATEGORY:
-            query.edit_message_text("请先使用 /claim 命令开始申请。")
+            self._safe_edit_message(query, "请先使用 /claim 命令开始申请。")
             return
         
         result = self.claims_manager.process_claim_step(
             query.from_user.id, 'category', callback_data
         )
         
-        query.edit_message_text(
-            result['message'],
-            reply_markup=result.get('keyboard')
-        )
+        self._safe_edit_message(query, result['message'], result.get('keyboard'))
     
     def _handle_confirmation_callback(self, query, callback_data, current_state, temp_data):
         """Handle confirmation callback"""
         if current_state != UserStateType.CLAIMING_CONFIRM:
-            query.edit_message_text("没有待确认的申请。")
+            self._safe_edit_message(query, "没有待确认的申请。")
             return
         
         result = self.claims_manager.process_claim_step(
             query.from_user.id, 'confirm', callback_data
         )
         
-        query.edit_message_text(
-            result['message'],
-            reply_markup=result.get('keyboard')
-        )
+        self._safe_edit_message(query, result['message'], result.get('keyboard'))
     
     def _handle_start_claim_callback(self, query):
         """Handle start claim callback"""
@@ -491,16 +486,13 @@ class TelegramBot:
         has_permission, error_msg = self.user_manager.check_user_permission(user_id)
         
         if not has_permission:
-            query.edit_message_text(error_msg)
+            self._safe_edit_message(query, error_msg)
             return
         
         # Start claim process
         result = self.claims_manager.start_claim_process(user_id)
         
-        query.edit_message_text(
-            result['message'],
-            reply_markup=result['keyboard']
-        )
+        self._safe_edit_message(query, result['message'], result['keyboard'])
     
     def _handle_new_claim_callback(self, query):
         """Handle new claim callback"""
@@ -510,16 +502,13 @@ class TelegramBot:
         has_permission, error_msg = self.user_manager.check_user_permission(user_id)
         
         if not has_permission:
-            query.edit_message_text(error_msg)
+            self._safe_edit_message(query, error_msg)
             return
         
         # Start new claim process
         result = self.claims_manager.start_claim_process(user_id)
         
-        query.edit_message_text(
-            result['message'],
-            reply_markup=result['keyboard']
-        )
+        self._safe_edit_message(query, result['message'], result['keyboard'])
     
     def _handle_cancel_callback(self, query, current_state):
         """Handle cancel callback"""
@@ -527,17 +516,14 @@ class TelegramBot:
         
         if self.state_manager.is_user_registering(user_id):
             result = self.user_manager.cancel_registration(user_id)
-            query.edit_message_text(result['message'])
+            self._safe_edit_message(query, result['message'])
         
         elif self.state_manager.is_user_claiming(user_id):
             result = self.claims_manager.cancel_claim_process(user_id)
-            query.edit_message_text(
-                result['message'],
-                reply_markup=result.get('keyboard')
-            )
+            self._safe_edit_message(query, result['message'], result.get('keyboard'))
         
         else:
-            query.edit_message_text("没有正在进行的操作可以取消。")
+            self._safe_edit_message(query, "没有正在进行的操作可以取消。")
     
     def _handle_registration_text(self, update, field, text):
         """Handle text input during registration"""
@@ -587,6 +573,18 @@ class TelegramBot:
             query.edit_message_text(f"❌ {message}")
         except Exception as e:
             logger.error(f"Failed to send callback error: {e}")
+    
+    def _safe_edit_message(self, query, message, reply_markup=None):
+        """Safely edit message, handling 'Message is not modified' error"""
+        try:
+            query.edit_message_text(message, reply_markup=reply_markup)
+        except Exception as e:
+            if "Message is not modified" in str(e):
+                # Message content is the same, just log and continue
+                logger.debug("Message content unchanged, skipping edit")
+            else:
+                logger.error(f"Failed to edit message: {e}")
+                raise
     
     def get_updater(self):
         """Get the updater instance for v13.15 compatibility"""
