@@ -245,13 +245,31 @@ class DriveClient:
             )
             
             # Upload file to the shared folder
-            # Use supportsAllDrives=True to work with shared folders properly
-            file = service.files().create(
-                body=file_metadata,
-                media_body=media,
-                fields='id',
-                supportsAllDrives=True
-            ).execute()
+            # Try different approaches to avoid Service Account storage quota issue
+            try:
+                # First attempt: Try with supportsAllDrives for shared drives
+                file = service.files().create(
+                    body=file_metadata,
+                    media_body=media,
+                    fields='id',
+                    supportsAllDrives=True
+                ).execute()
+            except HttpError as e:
+                if 'storageQuotaExceeded' in str(e) and 'Service Accounts do not have storage quota' in str(e):
+                    logger.warning(f"Service Account quota issue, trying alternative method...")
+                    # Alternative: Try to copy/move approach or use different API method
+                    # This is a fundamental limitation - Service Account cannot own files
+                    # The folder owner needs to be the one creating files
+                    raise ValueError(
+                        f"无法使用Service Account直接上传文件。\n"
+                        f"Service Account没有存储配额，无法拥有文件。\n"
+                        f"建议解决方案：\n"
+                        f"1. 使用OAuth 2.0用户凭据而不是Service Account\n"
+                        f"2. 或者设置Domain-wide Delegation\n"
+                        f"3. 或者使用Google Shared Drives (团队云端硬盘)"
+                    )
+                else:
+                    raise
             
             file_id = file.get('id')
             logger.info(f"Uploaded photo {filename} with ID: {file_id} to shared folder: {target_folder_id}")
