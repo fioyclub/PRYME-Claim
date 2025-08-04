@@ -8,6 +8,7 @@ import json
 from datetime import datetime
 from typing import Dict, List, Optional, Any
 from google.oauth2 import service_account
+from google.oauth2.credentials import Credentials as OAuthCredentials
 from google.auth.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
@@ -18,27 +19,47 @@ logger = logging.getLogger(__name__)
 class SheetsClient:
     """Client for Google Sheets API operations"""
     
-    def __init__(self, credentials_json: str, spreadsheet_id: str):
+    def __init__(self, credentials_json: Optional[str] = None, token_json: Optional[str] = None, 
+                 spreadsheet_id: str = None):
         """
         Initialize Google Sheets client
         
         Args:
-            credentials_json: Service account credentials as JSON string
+            credentials_json: Service account credentials as JSON string (legacy)
+            token_json: OAuth token as JSON string (preferred)
             spreadsheet_id: Google Sheets spreadsheet ID
         """
         self.spreadsheet_id = spreadsheet_id
         self._service = None
-        self._credentials = self._create_credentials(credentials_json)
+        self._credentials = self._create_credentials(credentials_json, token_json)
         
-    def _create_credentials(self, credentials_json: str) -> Credentials:
-        """Create Google service account credentials"""
+    def _create_credentials(self, credentials_json: Optional[str], token_json: Optional[str]) -> Credentials:
+        """Create Google credentials (OAuth preferred, Service Account as fallback)"""
+        # Define scopes for both Drive and Sheets access
+        scopes = [
+            'https://www.googleapis.com/auth/drive.file',
+            'https://www.googleapis.com/auth/spreadsheets'
+        ]
+        
         try:
-            credentials_dict = json.loads(credentials_json)
-            credentials = service_account.Credentials.from_service_account_info(
-                credentials_dict,
-                scopes=['https://www.googleapis.com/auth/spreadsheets']
-            )
-            return credentials
+            if token_json:
+                # Use OAuth 2.0 user credentials (preferred)
+                logger.info("Using OAuth 2.0 user credentials for Google Sheets")
+                token_dict = json.loads(token_json)
+                credentials = OAuthCredentials.from_authorized_user_info(token_dict, scopes)
+                return credentials
+            elif credentials_json:
+                # Fallback to Service Account credentials (legacy)
+                logger.info("Using Service Account credentials for Google Sheets")
+                credentials_dict = json.loads(credentials_json)
+                credentials = service_account.Credentials.from_service_account_info(
+                    credentials_dict,
+                    scopes=scopes
+                )
+                return credentials
+            else:
+                raise ValueError("Either token_json or credentials_json must be provided")
+                
         except (json.JSONDecodeError, ValueError) as e:
             logger.error(f"Failed to create credentials: {e}")
             raise ValueError(f"Invalid Google credentials: {e}")
