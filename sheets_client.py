@@ -7,8 +7,8 @@ import asyncio
 import json
 from datetime import datetime
 from typing import Dict, List, Optional, Any
+from google.oauth2 import service_account
 from google.auth.credentials import Credentials
-from google.auth import service_account
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 import logging
