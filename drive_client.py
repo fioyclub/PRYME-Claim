@@ -215,7 +215,7 @@ class DriveClient:
             raise
     
     def _upload_photo_sync(self, photo_data: bytes, filename: str, folder_id: str) -> str:
-        """Synchronous photo upload"""
+        """Synchronous photo upload to shared folder"""
         service = self._get_service()
         
         try:
@@ -224,13 +224,15 @@ class DriveClient:
                 'name': filename
             }
             
-            # Only set parents if folder_id is provided and not empty
-            if folder_id:
-                file_metadata['parents'] = [folder_id]
-            elif self.root_folder_id:
-                # Use root folder if no specific folder provided
-                file_metadata['parents'] = [self.root_folder_id]
-            # If no folder specified, upload to service account's accessible location
+            # Always upload to the specified shared folder
+            # This folder should be owned by a user account with storage quota
+            # and shared with the service account
+            target_folder_id = folder_id or self.root_folder_id
+            
+            if not target_folder_id:
+                raise ValueError("No target folder specified. Please set GOOGLE_DRIVE_FOLDER_ID environment variable.")
+            
+            file_metadata['parents'] = [target_folder_id]
             
             # Create media upload object
             media = MediaIoBaseUpload(
@@ -239,7 +241,7 @@ class DriveClient:
                 resumable=True
             )
             
-            # Upload file
+            # Upload file to the shared folder
             file = service.files().create(
                 body=file_metadata,
                 media_body=media,
@@ -247,31 +249,62 @@ class DriveClient:
             ).execute()
             
             file_id = file.get('id')
-            logger.info(f"Uploaded photo {filename} with ID: {file_id}")
+            logger.info(f"Uploaded photo {filename} with ID: {file_id} to shared folder: {target_folder_id}")
+            
+            # Set file permissions to make it viewable by anyone with the link
+            # This ensures the file can be accessed via the shareable link
+            try:
+                permission = {
+                    'role': 'reader',
+                    'type': 'anyone'
+                }
+                service.permissions().create(
+                    fileId=file_id,
+                    body=permission
+                ).execute()
+                logger.info(f"Set public read permissions for file {file_id}")
+            except HttpError as perm_error:
+                logger.warning(f"Could not set public permissions for file {file_id}: {perm_error}")
+                # Continue anyway - the file might still be accessible through the shared folder
+            
             return file_id
             
         except HttpError as e:
             logger.error(f"HTTP error uploading photo {filename}: {e}")
-            # If storage quota exceeded, try uploading without folder organization
-            if e.resp.status == 403 and 'storageQuotaExceeded' in str(e):
-                logger.warning(f"Storage quota exceeded, trying alternative upload method for {filename}")
-                try:
-                    # Try uploading to a shared drive or different location
-                    file_metadata_simple = {'name': filename}
-                    file = service.files().create(
-                        body=file_metadata_simple,
-                        media_body=media,
-                        fields='id'
-                    ).execute()
-                    file_id = file.get('id')
-                    logger.info(f"Successfully uploaded {filename} with alternative method, ID: {file_id}")
-                    return file_id
-                except Exception as fallback_error:
-                    logger.error(f"Fallback upload also failed for {filename}: {fallback_error}")
-                    raise e  # Raise original error
-            raise
+            # Provide more specific error messages based on the error type
+            if e.resp.status == 403:
+                if 'storageQuotaExceeded' in str(e):
+                    error_msg = (
+                        f"存储配额已满。解决方案：\n"
+                        f"1. 请确保文件夹 {target_folder_id} 属于有存储空间的用户账号\n"
+                        f"2. 该文件夹需要与Service Account共享并给予编辑权限\n"
+                        f"3. 检查文件夹所有者的Google Drive存储空间是否充足"
+                    )
+                elif 'insufficientFilePermissions' in str(e):
+                    error_msg = (
+                        f"权限不足。解决方案：\n"
+                        f"1. 请将文件夹 {target_folder_id} 与Service Account邮箱共享\n"
+                        f"2. 确保给予'编辑者'权限\n"
+                        f"3. Service Account邮箱可在Google Cloud Console中找到"
+                    )
+                else:
+                    error_msg = f"访问被拒绝 (HTTP 403)。请检查文件夹 {target_folder_id} 的权限设置。"
+                logger.error(error_msg)
+                raise ValueError(error_msg)
+            elif e.resp.status == 404:
+                error_msg = (
+                    f"文件夹不存在或无法访问 (HTTP 404)。解决方案：\n"
+                    f"1. 检查GOOGLE_DRIVE_FOLDER_ID是否正确：{target_folder_id}\n"
+                    f"2. 确保该文件夹与Service Account共享\n"
+                    f"3. 文件夹ID可从Google Drive URL中获取"
+                )
+                logger.error(error_msg)
+                raise ValueError(error_msg)
+            else:
+                logger.error(f"Google Drive API错误 (HTTP {e.resp.status}): {e}")
+                raise
         except Exception as e:
-            logger.error(f"Unexpected error uploading photo {filename}: {e}")
+            logger.error(f"上传照片时发生意外错误 {filename}: {e}")
             raise
     
     async def get_shareable_link(self, file_id: str) -> str:
