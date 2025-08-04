@@ -383,7 +383,7 @@ class UserManager:
             
             # Save to Google Sheets
             values = [
-                registration.telegram_id,
+                registration.telegram_user_id,
                 registration.name,
                 registration.phone,
                 registration.role.value,
