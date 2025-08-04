@@ -352,8 +352,11 @@ class UserManager:
         # Store role and complete registration
         self.state_manager.update_user_data(user_id, 'role', role)
         
+        # Get updated temp_data with the new role
+        _, updated_temp_data = self.state_manager.get_user_state(user_id)
+        
         # Complete registration
-        return self._complete_registration(user_id, temp_data)
+        return self._complete_registration(user_id, updated_temp_data)
     
     def _complete_registration(self, user_id: int, temp_data: Dict[str, Any]) -> Dict[str, Any]:
         """Complete the registration process."""
