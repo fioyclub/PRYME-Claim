@@ -21,31 +21,27 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 def initialize_google_clients(config: Config):
-    """Initialize Google API clients with proper error handling"""
+    """Initialize Google API clients with OAuth credentials"""
     try:
-        logger.info("Initializing Google API clients...")
+        logger.info("Initializing Google API clients with OAuth credentials...")
         
-        # Create token.json file if GOOGLE_TOKEN_JSON is provided
-        if config.GOOGLE_TOKEN_JSON:
-            logger.info("Creating token.json file from environment variable")
-            with open("token.json", "w") as f:
-                f.write(config.GOOGLE_TOKEN_JSON)
+        # Create token.json file from GOOGLE_TOKEN_JSON environment variable
+        logger.info("Creating token.json file from GOOGLE_TOKEN_JSON environment variable")
+        with open("token.json", "w") as f:
+            f.write(config.GOOGLE_TOKEN_JSON)
+        logger.info("token.json file created successfully")
         
-        # Initialize Google Sheets client
+        # Initialize Google Sheets client with OAuth
         sheets_client = SheetsClient(
-            credentials_json=config.GOOGLE_CREDENTIALS_JSON,
-            token_json=config.GOOGLE_TOKEN_JSON,
             spreadsheet_id=config.GOOGLE_SPREADSHEET_ID
         )
         
-        # Initialize Google Drive client
+        # Initialize Google Drive client with OAuth
         drive_client = DriveClient(
-            credentials_json=config.GOOGLE_CREDENTIALS_JSON,
-            token_json=config.GOOGLE_TOKEN_JSON,
             root_folder_id=config.GOOGLE_DRIVE_FOLDER_ID
         )
         
-        logger.info("Google API clients initialized successfully")
+        logger.info("Google API clients initialized successfully with OAuth credentials")
         return sheets_client, drive_client
         
     except Exception as e:
