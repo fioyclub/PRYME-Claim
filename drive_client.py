@@ -245,10 +245,12 @@ class DriveClient:
             )
             
             # Upload file to the shared folder
+            # Use supportsAllDrives=True to work with shared folders properly
             file = service.files().create(
                 body=file_metadata,
                 media_body=media,
-                fields='id'
+                fields='id',
+                supportsAllDrives=True
             ).execute()
             
             file_id = file.get('id')
@@ -263,7 +265,8 @@ class DriveClient:
                 }
                 service.permissions().create(
                     fileId=file_id,
-                    body=permission
+                    body=permission,
+                    supportsAllDrives=True
                 ).execute()
                 logger.info(f"Set public read permissions for file {file_id}")
             except HttpError as perm_error:
@@ -350,13 +353,15 @@ class DriveClient:
             
             service.permissions().create(
                 fileId=file_id,
-                body=permission
+                body=permission,
+                supportsAllDrives=True
             ).execute()
             
             # Get file info to construct shareable link
             file_info = service.files().get(
                 fileId=file_id,
-                fields='webViewLink'
+                fields='webViewLink',
+                supportsAllDrives=True
             ).execute()
             
             shareable_link = file_info.get('webViewLink')
