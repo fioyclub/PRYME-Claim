@@ -194,6 +194,9 @@ class SheetsClient:
         service = self._get_service()
         
         try:
+            # First, ensure the worksheet exists
+            self._ensure_worksheet_exists(worksheet)
+            
             # Check if headers exist, add them if not
             self._ensure_headers_exist(worksheet, range_name)
             
@@ -218,6 +221,48 @@ class SheetsClient:
             raise
         except Exception as e:
             logger.error(f"Unexpected error appending data to {worksheet}: {e}")
+            raise
+    
+    def _ensure_worksheet_exists(self, worksheet: str):
+        """Ensure worksheet exists, create if it doesn't"""
+        service = self._get_service()
+        
+        try:
+            # Check if worksheet already exists
+            spreadsheet = service.spreadsheets().get(
+                spreadsheetId=self.spreadsheet_id
+            ).execute()
+            
+            existing_sheets = [sheet['properties']['title'] 
+                             for sheet in spreadsheet['sheets']]
+            
+            if worksheet not in existing_sheets:
+                logger.info(f"Creating worksheet '{worksheet}' as it doesn't exist")
+                # Create new worksheet
+                request_body = {
+                    'requests': [{
+                        'addSheet': {
+                            'properties': {
+                                'title': worksheet
+                            }
+                        }
+                    }]
+                }
+                
+                service.spreadsheets().batchUpdate(
+                    spreadsheetId=self.spreadsheet_id,
+                    body=request_body
+                ).execute()
+                
+                logger.info(f"Successfully created worksheet '{worksheet}'")
+            else:
+                logger.info(f"Worksheet '{worksheet}' already exists")
+                
+        except HttpError as e:
+            logger.error(f"HTTP error ensuring worksheet {worksheet} exists: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"Unexpected error ensuring worksheet {worksheet} exists: {e}")
             raise
     
     def _ensure_headers_exist(self, worksheet: str, range_name: str):
@@ -251,12 +296,11 @@ class SheetsClient:
                 logger.info(f"Added headers to worksheet {worksheet}")
                 
         except HttpError as e:
-            if e.resp.status == 400:
-                # Worksheet might not exist, will be created by caller
-                pass
-            else:
-                logger.error(f"Error ensuring headers for {worksheet}: {e}")
-                raise 
+            logger.error(f"HTTP error ensuring headers for {worksheet}: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"Unexpected error ensuring headers for {worksheet}: {e}")
+            raise 
    
     async def get_user_by_telegram_id(self, user_id: int) -> Optional[Dict[str, Any]]:
         """
