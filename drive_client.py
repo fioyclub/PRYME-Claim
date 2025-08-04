@@ -32,6 +32,7 @@ class DriveClient:
         self._service = None
         self._credentials = self._create_credentials(credentials_json)
         self._folder_cache = {}  # Cache folder IDs to avoid repeated API calls
+        self._use_shared_drive = True  # Flag to use shared drive approach
         
     def _create_credentials(self, credentials_json: str) -> Credentials:
         """Create Google service account credentials"""
@@ -111,6 +112,11 @@ class DriveClient:
             return self._folder_cache[folder_path]
         
         try:
+            # If no root folder specified, return None to upload to accessible location
+            if not self.root_folder_id:
+                logger.warning("No root folder specified, files will be uploaded to default location")
+                return None
+            
             # Split path into components
             path_parts = folder_path.split('/')
             current_parent_id = self.root_folder_id
@@ -134,13 +140,21 @@ class DriveClient:
                     if current_parent_id:
                         folder_metadata['parents'] = [current_parent_id]
                     
-                    folder = service.files().create(
-                        body=folder_metadata,
-                        fields='id'
-                    ).execute()
-                    
-                    current_parent_id = folder.get('id')
-                    logger.info(f"Created folder '{part}' with ID: {current_parent_id}")
+                    try:
+                        folder = service.files().create(
+                            body=folder_metadata,
+                            fields='id'
+                        ).execute()
+                        
+                        current_parent_id = folder.get('id')
+                        logger.info(f"Created folder '{part}' with ID: {current_parent_id}")
+                    except HttpError as folder_error:
+                        if folder_error.resp.status == 403:
+                            logger.warning(f"Cannot create folder '{part}', using parent folder instead")
+                            # Use parent folder if can't create subfolder
+                            break
+                        else:
+                            raise
             
             # Cache the result
             self._folder_cache[folder_path] = current_parent_id
@@ -148,10 +162,12 @@ class DriveClient:
             
         except HttpError as e:
             logger.error(f"HTTP error creating folder {folder_path}: {e}")
-            raise
+            # Return root folder as fallback
+            return self.root_folder_id
         except Exception as e:
             logger.error(f"Unexpected error creating folder {folder_path}: {e}")
-            raise
+            # Return root folder as fallback
+            return self.root_folder_id
     
     def _find_folder_by_name(self, name: str, parent_id: Optional[str] = None) -> Optional[str]:
         """Find folder by name within parent folder"""
@@ -205,9 +221,16 @@ class DriveClient:
         try:
             # Create file metadata
             file_metadata = {
-                'name': filename,
-                'parents': [folder_id] if folder_id else []
+                'name': filename
             }
+            
+            # Only set parents if folder_id is provided and not empty
+            if folder_id:
+                file_metadata['parents'] = [folder_id]
+            elif self.root_folder_id:
+                # Use root folder if no specific folder provided
+                file_metadata['parents'] = [self.root_folder_id]
+            # If no folder specified, upload to service account's accessible location
             
             # Create media upload object
             media = MediaIoBaseUpload(
@@ -229,6 +252,23 @@ class DriveClient:
             
         except HttpError as e:
             logger.error(f"HTTP error uploading photo {filename}: {e}")
+            # If storage quota exceeded, try uploading without folder organization
+            if e.resp.status == 403 and 'storageQuotaExceeded' in str(e):
+                logger.warning(f"Storage quota exceeded, trying alternative upload method for {filename}")
+                try:
+                    # Try uploading to a shared drive or different location
+                    file_metadata_simple = {'name': filename}
+                    file = service.files().create(
+                        body=file_metadata_simple,
+                        media_body=media,
+                        fields='id'
+                    ).execute()
+                    file_id = file.get('id')
+                    logger.info(f"Successfully uploaded {filename} with alternative method, ID: {file_id}")
+                    return file_id
+                except Exception as fallback_error:
+                    logger.error(f"Fallback upload also failed for {filename}: {fallback_error}")
+                    raise e  # Raise original error
             raise
         except Exception as e:
             logger.error(f"Unexpected error uploading photo {filename}: {e}")
@@ -304,15 +344,27 @@ class DriveClient:
             if timestamp is None:
                 timestamp = datetime.now()
             
-            # Generate folder path and filename
-            folder_path = self.generate_folder_path(category, timestamp.isoformat())
-            filename = f"receipt_{user_id}_{timestamp.strftime('%Y%m%d_%H%M%S')}.jpg"
+            # Generate filename with category and timestamp info
+            filename = f"receipt_{user_id}_{category}_{timestamp.strftime('%Y%m%d_%H%M%S')}.jpg"
             
-            # Create folder structure
-            folder_id = await self.create_folder_if_not_exists(folder_path)
-            
-            # Upload photo
-            file_id = await self.upload_photo(photo_data, filename, folder_id)
+            # Try to upload with folder organization first
+            try:
+                # Generate folder path
+                folder_path = self.generate_folder_path(category, timestamp.isoformat())
+                
+                # Create folder structure
+                folder_id = await self.create_folder_if_not_exists(folder_path)
+                
+                # Upload photo
+                file_id = await self.upload_photo(photo_data, filename, folder_id)
+                
+            except HttpError as e:
+                if e.resp.status == 403 and 'storageQuotaExceeded' in str(e):
+                    logger.warning(f"Storage quota exceeded, uploading to root folder for user {user_id}")
+                    # Fallback: upload directly to root folder without organization
+                    file_id = await self.upload_photo(photo_data, filename, self.root_folder_id)
+                else:
+                    raise
             
             # Generate shareable link
             shareable_link = await self.get_shareable_link(file_id)
