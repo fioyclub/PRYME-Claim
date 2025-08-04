@@ -1,5 +1,5 @@
 # Telegram Bot Framework
-python-telegram-bot==20.7
+python-telegram-bot>=20.0,<21.0
 
 # Google APIs
 google-api-python-client==2.108.0
@@ -18,4 +18,3 @@ Pillow>=9.0.0,<11.0.0
 
 # HTTP client for health check testing (optional)
 requests==2.31.0
-
