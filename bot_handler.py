@@ -86,7 +86,6 @@ class TelegramBot:
             # Start Flask server for health check and webhook handling
             from flask import Flask, request, jsonify
             import time
-            import threading
             
             app = Flask(__name__)
             start_time = time.time()
@@ -379,7 +378,7 @@ class TelegramBot:
                 )
                 return
             
-            # Get photo data
+            # Get photo data (v13.15 style)
             photo = update.message.photo[-1]  # Get highest resolution
             photo_file = photo.get_file()
             photo_data = photo_file.download_as_bytearray()
