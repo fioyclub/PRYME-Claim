@@ -46,7 +46,7 @@ class UserManager:
         
         logger.info("UserManager initialized")
     
-    async def is_user_registered(self, user_id: int) -> bool:
+    def is_user_registered(self, user_id: int) -> bool:
         """
         Check if a user is already registered.
         
@@ -64,7 +64,7 @@ class UserManager:
                 return False
             
             # Check in Google Sheets
-            user_data = await self.sheets_client.get_user_by_telegram_id(user_id)
+            user_data = self.sheets_client._get_user_sync(user_id)
             is_registered = user_data is not None
             
             logger.debug("User %d registration status: %s", user_id, is_registered)
@@ -74,7 +74,7 @@ class UserManager:
             logger.error("Error checking registration for user %d: %s", user_id, e)
             return False
     
-    async def get_user_data(self, user_id: int) -> Optional[UserRegistration]:
+    def get_user_data(self, user_id: int) -> Optional[UserRegistration]:
         """
         Get user registration data.
         
@@ -92,7 +92,7 @@ class UserManager:
                 return None
             
             # Get data from Google Sheets
-            user_data = await self.sheets_client.get_user_by_telegram_id(user_id)
+            user_data = self.sheets_client._get_user_sync(user_id)
             
             if not user_data:
                 return None
@@ -137,7 +137,7 @@ class UserManager:
                 }
             
             # Check if user is already registered
-            if await self.is_user_registered(user_id):
+            if self.is_user_registered(user_id):
                 logger.info("User %d attempted to register but is already registered", user_id)
                 return {
                     'success': False,
@@ -186,7 +186,7 @@ class UserManager:
                 'next_step': None
             }
     
-    async def process_registration_step(self, user_id: int, step: str, data: str) -> Dict[str, Any]:
+    def process_registration_step(self, user_id: int, step: str, data: str) -> Dict[str, Any]:
         """
         Process a step in the registration flow.
         
@@ -212,13 +212,13 @@ class UserManager:
             
             # Process based on current step
             if step == UserStateType.REGISTERING_NAME.value or current_state == UserStateType.REGISTERING_NAME:
-                return await self._process_name_input(user_id, data, temp_data)
+                return self._process_name_input(user_id, data, temp_data)
             
             elif step == UserStateType.REGISTERING_PHONE.value or current_state == UserStateType.REGISTERING_PHONE:
-                return await self._process_phone_input(user_id, data, temp_data)
+                return self._process_phone_input(user_id, data, temp_data)
             
             elif step == UserStateType.REGISTERING_ROLE.value or current_state == UserStateType.REGISTERING_ROLE:
-                return await self._process_role_selection(user_id, data, temp_data)
+                return self._process_role_selection(user_id, data, temp_data)
             
             else:
                 logger.warning("Unknown registration step %s for user %d", step, user_id)
@@ -236,7 +236,7 @@ class UserManager:
                 'next_step': None
             }
     
-    async def _process_name_input(self, user_id: int, name: str, temp_data: Dict[str, Any]) -> Dict[str, Any]:
+    def _process_name_input(self, user_id: int, name: str, temp_data: Dict[str, Any]) -> Dict[str, Any]:
         """Process name input step with enhanced error handling and retry flow."""
         try:
             # Validate name using new validation system
@@ -285,7 +285,7 @@ class UserManager:
                 'next_step': UserStateType.REGISTERING_NAME.value
             }
     
-    async def _process_phone_input(self, user_id: int, phone: str, temp_data: Dict[str, Any]) -> Dict[str, Any]:
+    def _process_phone_input(self, user_id: int, phone: str, temp_data: Dict[str, Any]) -> Dict[str, Any]:
         """Process phone input step with enhanced error handling and retry flow."""
         try:
             # Validate phone number using new validation system
@@ -335,7 +335,7 @@ class UserManager:
                 'next_step': UserStateType.REGISTERING_PHONE.value
             }
     
-    async def _process_role_selection(self, user_id: int, role: str, temp_data: Dict[str, Any]) -> Dict[str, Any]:
+    def _process_role_selection(self, user_id: int, role: str, temp_data: Dict[str, Any]) -> Dict[str, Any]:
         """Process role selection step."""
         # Validate role
         try:
@@ -353,9 +353,9 @@ class UserManager:
         self.state_manager.update_user_data(user_id, 'role', role)
         
         # Complete registration
-        return await self._complete_registration(user_id, temp_data)
+        return self._complete_registration(user_id, temp_data)
     
-    async def _complete_registration(self, user_id: int, temp_data: Dict[str, Any]) -> Dict[str, Any]:
+    def _complete_registration(self, user_id: int, temp_data: Dict[str, Any]) -> Dict[str, Any]:
         """Complete the registration process."""
         try:
             # Get all collected data
@@ -382,10 +382,14 @@ class UserManager:
             )
             
             # Save to Google Sheets
-            success = await self.sheets_client.append_registration_data(
-                worksheet=role,  # Use role as worksheet name
-                user_data=registration.to_dict()
-            )
+            values = [
+                registration.telegram_id,
+                registration.name,
+                registration.phone,
+                registration.role.value,
+                registration.register_date.strftime('%Y-%m-%d %H:%M:%S')
+            ]
+            success = self.sheets_client._append_data_sync(role, [values], 'A:E')
             
             if not success:
                 logger.error("Failed to save registration data for user %d", user_id)
@@ -484,7 +488,7 @@ class UserManager:
                 'collected_data': {}
             }
     
-    async def check_user_permission(self, user_id: int, required_role: Optional[UserRole] = None) -> Tuple[bool, Optional[str]]:
+    def check_user_permission(self, user_id: int, required_role: Optional[UserRole] = None) -> Tuple[bool, Optional[str]]:
         """
         Check if user has permission to perform an action.
         
@@ -497,7 +501,7 @@ class UserManager:
         """
         try:
             # Check if user is registered
-            if not await self.is_user_registered(user_id):
+            if not self.is_user_registered(user_id):
                 return False, "你需要先注册才能使用此功能。请使用 /register 命令进行注册。"
             
             # If no specific role required, registration is sufficient
@@ -505,7 +509,7 @@ class UserManager:
                 return True, None
             
             # Get user data and check role
-            user_data = await self.get_user_data(user_id)
+            user_data = self.get_user_data(user_id)
             if not user_data:
                 return False, "无法获取用户信息，请重新注册。"
             
