@@ -4,7 +4,6 @@ Integrates all components and handles application startup with webhook/polling s
 """
 import os
 import logging
-import asyncio
 from config import Config
 from health import HealthServer
 from bot_handler import TelegramBot
@@ -21,7 +20,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-async def initialize_google_clients(config: Config):
+def initialize_google_clients(config: Config):
     """Initialize Google API clients with proper error handling"""
     try:
         logger.info("Initializing Google API clients...")
@@ -45,7 +44,7 @@ async def initialize_google_clients(config: Config):
         logger.error(f"Failed to initialize Google API clients: {e}")
         raise
 
-async def initialize_managers(sheets_client, drive_client):
+def initialize_managers(sheets_client, drive_client):
     """Initialize application managers"""
     try:
         logger.info("Initializing application managers...")
@@ -66,14 +65,14 @@ async def initialize_managers(sheets_client, drive_client):
         logger.error(f"Failed to initialize managers: {e}")
         raise
 
-async def start_bot_application(config: Config):
+def start_bot_application(config: Config):
     """Start the main bot application"""
     try:
-        # Initialize Google API clients
-        sheets_client, drive_client = await initialize_google_clients(config)
+        # Initialize Google API clients (synchronous for v13.15)
+        sheets_client, drive_client = initialize_google_clients(config)
         
-        # Initialize managers
-        state_manager, user_manager, claims_manager = await initialize_managers(
+        # Initialize managers (synchronous for v13.15)
+        state_manager, user_manager, claims_manager = initialize_managers(
             sheets_client, drive_client
         )
         
@@ -92,17 +91,17 @@ async def start_bot_application(config: Config):
         if config.WEBHOOK_URL:
             # Production mode with webhook
             logger.info(f"Starting webhook mode on {config.WEBHOOK_URL}:{config.PORT}")
-            await bot.start_webhook(config.WEBHOOK_URL, config.PORT)
+            bot.start_webhook(config.WEBHOOK_URL, config.PORT)
         else:
             # Development mode with polling
             logger.info("Starting polling mode for development")
-            await bot.start_polling()
+            bot.start_polling()
             
     except Exception as e:
         logger.error(f"Failed to start bot application: {e}")
         raise
 
-async def main():
+def main():
     """Main application entry point"""
     try:
         # Load configuration from environment variables
@@ -123,7 +122,7 @@ async def main():
         
         # Start the main bot application
         logger.info("Starting Telegram Claim Bot application...")
-        await start_bot_application(config)
+        start_bot_application(config)
         
     except KeyboardInterrupt:
         logger.info("Application interrupted by user")
@@ -134,9 +133,9 @@ async def main():
         logger.info("Application shutdown complete")
 
 if __name__ == '__main__':
-    # Run the main application
+    # Run the main application (v13.15 - synchronous)
     try:
-        asyncio.run(main())
+        main()
     except KeyboardInterrupt:
         logger.info("Application terminated by user")
     except Exception as e:
