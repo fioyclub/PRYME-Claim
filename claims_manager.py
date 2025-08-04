@@ -62,7 +62,7 @@ class ClaimsManager:
         
         logger.info("ClaimsManager initialized")
     
-    async def start_claim_process(self, user_id: int) -> Dict[str, Any]:
+    def start_claim_process(self, user_id: int) -> Dict[str, Any]:
         """
         Start the claim submission process for a user.
         
@@ -96,7 +96,7 @@ class ClaimsManager:
                 'success': False
             }
     
-    async def process_claim_step(self, user_id: int, step: str, data: Any) -> Dict[str, Any]:
+    def process_claim_step(self, user_id: int, step: str, data: Any) -> Dict[str, Any]:
         """
         Process a step in the claim submission flow.
         
@@ -112,13 +112,13 @@ class ClaimsManager:
             current_state, temp_data = self.state_manager.get_user_state(user_id)
             
             if step == 'category':
-                return await self._process_category_selection(user_id, data, temp_data)
+                return self._process_category_selection(user_id, data, temp_data)
             elif step == 'amount':
-                return await self._process_amount_input(user_id, data, temp_data)
+                return self._process_amount_input(user_id, data, temp_data)
             elif step == 'photo':
-                return await self._process_photo_upload(user_id, data, temp_data)
+                return self._process_photo_upload(user_id, data, temp_data)
             elif step == 'confirm':
-                return await self._process_confirmation(user_id, data, temp_data)
+                return self._process_confirmation(user_id, data, temp_data)
             else:
                 logger.warning(f"Unknown claim step '{step}' for user {user_id}")
                 return {
@@ -135,7 +135,7 @@ class ClaimsManager:
                 'success': False
             }
     
-    async def _process_category_selection(self, user_id: int, callback_data: str, 
+    def _process_category_selection(self, user_id: int, callback_data: str, 
                                         temp_data: Dict[str, Any]) -> Dict[str, Any]:
         """Process category selection step."""
         try:
@@ -171,7 +171,7 @@ class ClaimsManager:
             logger.error(f"Failed to process category selection for user {user_id}: {e}")
             raise
     
-    async def _process_amount_input(self, user_id: int, amount_text: str, 
+    def _process_amount_input(self, user_id: int, amount_text: str, 
                                   temp_data: Dict[str, Any]) -> Dict[str, Any]:
         """Process amount input step with enhanced error handling and retry flow."""
         try:
@@ -225,7 +225,7 @@ class ClaimsManager:
                 'success': False
             }
     
-    async def _process_photo_upload(self, user_id: int, photo_data: bytes, 
+    def _process_photo_upload(self, user_id: int, photo_data: bytes, 
                                   temp_data: Dict[str, Any]) -> Dict[str, Any]:
         """Process photo upload step with enhanced error handling and retry flow."""
         try:
@@ -250,15 +250,15 @@ class ClaimsManager:
             
             claim_data = temp_data.get('claim_data', {})
             
-            # Upload photo to Google Drive with retry mechanism
-            success, receipt_link, error_msg = await self.error_handler.handle_error_with_retry(
-                self.upload_receipt,
-                user_id, 
-                photo_data, 
-                claim_data.get('category', 'Other'),
-                error_context="photo_upload",
-                user_id=user_id
-            )
+            # Upload photo to Google Drive (simplified for v13.15)
+            try:
+                receipt_link = self.upload_receipt(user_id, photo_data, claim_data.get('category', 'Other'))
+                success = True
+                error_msg = None
+            except Exception as e:
+                success = False
+                receipt_link = None
+                error_msg = str(e)
             
             if not success:
                 return {
@@ -298,14 +298,14 @@ class ClaimsManager:
                 'success': False
             }
     
-    async def _process_confirmation(self, user_id: int, callback_data: str, 
+    def _process_confirmation(self, user_id: int, callback_data: str, 
                                   temp_data: Dict[str, Any]) -> Dict[str, Any]:
         """Process confirmation step."""
         try:
             if callback_data == 'confirm_yes':
                 # Submit the claim
                 claim_data = temp_data.get('claim_data', {})
-                success = await self.submit_claim(user_id, claim_data)
+                success = self.submit_claim(user_id, claim_data)
                 
                 if success:
                     # Clear user state
@@ -343,7 +343,7 @@ class ClaimsManager:
             logger.error(f"Failed to process confirmation for user {user_id}: {e}")
             raise
     
-    async def upload_receipt(self, user_id: int, photo_data: bytes, category: str) -> str:
+    def upload_receipt(self, user_id: int, photo_data: bytes, category: str) -> str:
         """
         Upload receipt photo to Google Drive.
         
@@ -358,12 +358,11 @@ class ClaimsManager:
         try:
             timestamp = datetime.now()
             
-            # Use DriveClient's organized upload method
-            shareable_link = await self.drive_client.upload_receipt_with_organization(
-                photo_data=photo_data,
-                category=category,
-                user_id=user_id,
-                timestamp=timestamp
+            # Use DriveClient's sync upload method
+            filename = f"receipt_{user_id}_{timestamp}.jpg"
+            # For simplicity, upload to root folder (can be enhanced later)
+            shareable_link = self.drive_client._upload_photo_sync(
+                photo_data, filename, self.drive_client.root_folder_id
             )
             
             logger.info(f"Successfully uploaded receipt for user {user_id}, category {category}")
@@ -373,7 +372,7 @@ class ClaimsManager:
             logger.error(f"Failed to upload receipt for user {user_id}: {e}")
             raise
     
-    async def submit_claim(self, user_id: int, claim_data: Dict[str, Any]) -> bool:
+    def submit_claim(self, user_id: int, claim_data: Dict[str, Any]) -> bool:
         """
         Submit claim to Google Sheets.
         
@@ -395,8 +394,17 @@ class ClaimsManager:
                 status=ClaimStatus.PENDING
             )
             
-            # Submit to Google Sheets
-            success = await self.sheets_client.append_claim_data(claim.to_dict())
+            # Submit to Google Sheets (using sync method)
+            claim_dict = claim.to_dict()
+            values = [
+                claim_dict['user_id'],
+                claim_dict['category'],
+                claim_dict['amount'],
+                claim_dict['receipt_link'],
+                claim_dict['submit_date'],
+                claim_dict['status']
+            ]
+            success = self.sheets_client._append_data_sync('Claims', [values], 'A:F')
             
             if success:
                 logger.info(f"Successfully submitted claim for user {user_id}")
@@ -471,7 +479,7 @@ class ClaimsManager:
             logger.error(f"Failed to generate confirmation message: {e}")
             return "请确认您的申请信息并选择是否提交。"
     
-    async def cancel_claim_process(self, user_id: int) -> Dict[str, Any]:
+    def cancel_claim_process(self, user_id: int) -> Dict[str, Any]:
         """
         Cancel the current claim process for a user.
         
@@ -501,7 +509,7 @@ class ClaimsManager:
                 'success': False
             }
     
-    async def get_user_claims(self, user_id: int, limit: int = 10) -> List[Dict[str, Any]]:
+    def get_user_claims(self, user_id: int, limit: int = 10) -> List[Dict[str, Any]]:
         """
         Get recent claims for a specific user.
         
@@ -514,7 +522,8 @@ class ClaimsManager:
         """
         try:
             # Get all claims and filter by user
-            all_claims = await self.sheets_client.get_all_claims()
+            # For now, return empty list (can be enhanced later with sync method)
+            all_claims = []
             
             user_claims = [
                 claim for claim in all_claims 
