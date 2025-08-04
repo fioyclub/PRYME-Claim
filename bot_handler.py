@@ -6,7 +6,7 @@ Handles Telegram webhook/polling and message routing with comprehensive error ha
 import logging
 from typing import Optional
 from telegram import Update, Bot
-from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters
+from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
 from telegram.constants import ParseMode
 
 from user_manager import UserManager
@@ -90,10 +90,29 @@ class TelegramBot:
             from flask import Flask, request, jsonify
             import time
             import threading
+            import asyncio
+            from concurrent.futures import ThreadPoolExecutor
             
             app = Flask(__name__)
             start_time = time.time()
             health_check_count = 0
+            
+            # Create a thread pool for handling webhook updates
+            executor = ThreadPoolExecutor(max_workers=4)
+            
+            def process_update_sync(update_data):
+                """Process update in a separate thread with its own event loop"""
+                try:
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    try:
+                        from telegram import Update
+                        update = Update.de_json(update_data, self.application.bot)
+                        loop.run_until_complete(self.application.process_update(update))
+                    finally:
+                        loop.close()
+                except Exception as e:
+                    logger.error(f"Error processing update: {e}")
             
             @app.route('/health')
             def health_check():
@@ -126,14 +145,8 @@ class TelegramBot:
                 try:
                     update_data = request.get_json()
                     if update_data:
-                        from telegram import Update
-                        import asyncio
-                        
-                        # Create update object and process it
-                        update = Update.de_json(update_data, self.application.bot)
-                        
-                        # Process update asynchronously
-                        asyncio.create_task(self.application.process_update(update))
+                        # Submit update processing to thread pool
+                        executor.submit(process_update_sync, update_data)
                     
                     return '', 200
                 except Exception as e:
@@ -142,7 +155,7 @@ class TelegramBot:
             
             # Run Flask app
             logger.info(f"Starting Flask server on port {port}")
-            app.run(host='0.0.0.0', port=port, debug=False)
+            app.run(host='0.0.0.0', port=port, debug=False, threaded=True)
             
         except Exception as e:
             logger.error(f"Failed to start webhook: {e}")
@@ -157,26 +170,23 @@ class TelegramBot:
             await self.application.initialize()
             await self.application.start()
             
-            # Start polling
-            await self.application.updater.start_polling()
-            
-            # Keep running
-            import asyncio
-            try:
-                while True:
-                    await asyncio.sleep(1)
-            except KeyboardInterrupt:
-                logger.info("Polling stopped by user")
-            finally:
-                await self.application.updater.stop()
-                await self.application.stop()
-                await self.application.shutdown()
+            # Start polling - v20+ uses run_polling()
+            await self.application.run_polling(
+                poll_interval=1.0,
+                timeout=10,
+                bootstrap_retries=-1,
+                read_timeout=6,
+                write_timeout=6,
+                connect_timeout=7,
+                pool_timeout=1,
+                stop_signals=None  # We'll handle shutdown manually
+            )
             
         except Exception as e:
             logger.error(f"Failed to start polling: {e}")
             raise
     
-    async def handle_start_command(self, update: Update, context):
+    async def handle_start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /start command"""
         try:
             user_id = update.effective_user.id
@@ -214,7 +224,7 @@ class TelegramBot:
             logger.error(f"Error handling start command: {e}")
             await self._send_error_message(update, "启动命令处理失败，请稍后重试。")
     
-    async def handle_help_command(self, update: Update, context):
+    async def handle_help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /help command"""
         try:
             help_message = (
@@ -248,7 +258,7 @@ class TelegramBot:
             logger.error(f"Error handling help command: {e}")
             await self._send_error_message(update, "帮助信息获取失败，请稍后重试。")
     
-    async def handle_register_command(self, update: Update, context):
+    async def handle_register_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /register command"""
         try:
             user_id = update.effective_user.id
@@ -274,7 +284,7 @@ class TelegramBot:
             logger.error(f"Error handling register command: {e}")
             await self._send_error_message(update, "注册命令处理失败，请稍后重试。")
     
-    async def handle_claim_command(self, update: Update, context):
+    async def handle_claim_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /claim command"""
         try:
             user_id = update.effective_user.id
@@ -303,7 +313,7 @@ class TelegramBot:
             logger.error(f"Error handling claim command: {e}")
             await self._send_error_message(update, "申请命令处理失败，请稍后重试。")
     
-    async def handle_callback_query(self, update: Update, context):
+    async def handle_callback_query(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle inline keyboard callbacks"""
         try:
             query = update.callback_query
@@ -351,7 +361,7 @@ class TelegramBot:
             logger.error(f"Error handling callback query: {e}")
             await self._send_callback_error(update.callback_query, "操作处理失败，请稍后重试。")
     
-    async def handle_text_input(self, update: Update, context):
+    async def handle_text_input(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle text input from users"""
         try:
             user_id = update.effective_user.id
@@ -389,7 +399,7 @@ class TelegramBot:
             logger.error(f"Error handling text input: {e}")
             await self._send_error_message(update, "文本处理失败，请稍后重试。")
     
-    async def handle_photo_upload(self, update: Update, context):
+    async def handle_photo_upload(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle photo uploads"""
         try:
             user_id = update.effective_user.id
@@ -430,7 +440,7 @@ class TelegramBot:
             logger.error(f"Error handling photo upload: {e}")
             await self._send_error_message(update, "照片处理失败，请稍后重试。")
     
-    async def handle_error(self, update: Update, context):
+    async def handle_error(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle errors with comprehensive error handling"""
         error = context.error
         user_id = update.effective_user.id if update and update.effective_user else None
