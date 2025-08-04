@@ -137,13 +137,18 @@ class TelegramBot:
                     'version': '1.0.0'
                 }), 200
             
-            # Start webhook server
-            await self.application.run_webhook(
+            # Start webhook server - simplified approach for python-telegram-bot 20.7
+            import asyncio
+            
+            # Start the webhook using the application's built-in method
+            webserver = self.application.run_webhook(
                 listen="0.0.0.0",
                 port=port,
-                webhook_url=webhook_url,
-                webhook_app=app
+                webhook_url=webhook_url
             )
+            
+            # Keep running
+            await webserver
             
         except Exception as e:
             logger.error(f"Failed to start webhook: {e}")
