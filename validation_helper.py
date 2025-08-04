@@ -8,7 +8,7 @@ format examples, and user guidance for input validation failures.
 import logging
 from typing import Dict, Any, Optional, List, Tuple
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.constants import ParseMode
+from telegram import ParseMode
 
 from validation import (
     validate_name, validate_phone_number, validate_amount, validate_photo_file,
