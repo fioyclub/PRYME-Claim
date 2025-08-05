@@ -87,6 +87,32 @@ class KeyboardBuilder:
         return InlineKeyboardMarkup(keyboard)
 
     @staticmethod
+    def register_now_keyboard() -> InlineKeyboardMarkup:
+        """
+        Create inline keyboard for unregistered users in /start command.
+        
+        Returns:
+            InlineKeyboardMarkup: Keyboard with register now button
+        """
+        keyboard = [
+            [InlineKeyboardButton("Register NOW 📝", callback_data="register_now")]
+        ]
+        return InlineKeyboardMarkup(keyboard)
+
+    @staticmethod
+    def start_claim_keyboard() -> InlineKeyboardMarkup:
+        """
+        Create inline keyboard for registered users in /start command.
+        
+        Returns:
+            InlineKeyboardMarkup: Keyboard with start claim button
+        """
+        keyboard = [
+            [InlineKeyboardButton("Start Claim Process 💰", callback_data="start_claim")]
+        ]
+        return InlineKeyboardMarkup(keyboard)
+
+    @staticmethod
     def claim_complete_keyboard() -> InlineKeyboardMarkup:
         """
         Create inline keyboard shown after successful claim submission.
