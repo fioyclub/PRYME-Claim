@@ -57,6 +57,7 @@ class ClaimsManager:
             'category_flight': ClaimCategory.FLIGHT,
             'category_event': ClaimCategory.EVENT,
             'category_ai': ClaimCategory.AI,
+            'category_reception': ClaimCategory.RECEPTION,
             'category_other': ClaimCategory.OTHER
         }
         
@@ -444,6 +445,7 @@ class ClaimsManager:
             ClaimCategory.FLIGHT: '✈️',
             ClaimCategory.EVENT: '🎉',
             ClaimCategory.AI: '🤖',
+            ClaimCategory.RECEPTION: '🎪',
             ClaimCategory.OTHER: '📦'
         }
         return emoji_map.get(category, '📦')
