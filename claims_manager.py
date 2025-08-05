@@ -16,6 +16,7 @@ from models import Claim, ClaimCategory, ClaimStatus, UserStateType
 from state_manager import StateManager
 from sheets_client import SheetsClient
 from drive_client import DriveClient
+from config import Config
 from validation import validate_amount, validate_photo_file, format_amount, get_validation_help_message
 from validation_helper import (
     global_validation_helper, create_validation_error_response,
@@ -36,7 +37,7 @@ class ClaimsManager:
     """
     
     def __init__(self, sheets_client: SheetsClient, drive_client: DriveClient, 
-                 state_manager: StateManager):
+                 state_manager: StateManager, config: Config):
         """
         Initialize the ClaimsManager.
         
@@ -44,10 +45,12 @@ class ClaimsManager:
             sheets_client: Google Sheets client for data storage
             drive_client: Google Drive client for photo uploads
             state_manager: State manager for tracking user conversations
+            config: Configuration instance for accessing environment variables
         """
         self.sheets_client = sheets_client
         self.drive_client = drive_client
         self.state_manager = state_manager
+        self.config = config
         self.error_handler = global_error_handler
         
         # Category mapping for callback data to enum
@@ -341,7 +344,7 @@ class ClaimsManager:
     
     def upload_receipt(self, user_id: int, photo_data: bytes, category: str) -> str:
         """
-        Upload receipt photo to Google Drive shared folder and get shareable link.
+        Upload receipt photo to category-specific Google Drive folder and get shareable link.
         
         Args:
             user_id: Telegram user ID
@@ -357,9 +360,14 @@ class ClaimsManager:
             # Generate filename with timestamp and category for better organization
             filename = f"receipt_{user_id}_{category}_{timestamp.strftime('%Y%m%d_%H%M%S')}.jpg"
             
-            # Upload to shared folder (not service account's drive)
+            # Get category-specific folder ID from config
+            category_folder_id = self.config.get_category_folder_id(category)
+            
+            logger.info(f"Uploading receipt for user {user_id}, category {category} to folder {category_folder_id}")
+            
+            # Upload to category-specific folder
             file_id = self.drive_client._upload_photo_sync(
-                photo_data, filename, self.drive_client.root_folder_id
+                photo_data, filename, category_folder_id
             )
             
             # Get shareable link for the uploaded file
