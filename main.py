@@ -9,6 +9,7 @@ from health import HealthServer
 from bot_handler import TelegramBot
 from user_manager import UserManager
 from claims_manager import ClaimsManager
+from dayoff_manager import DayOffManager
 from state_manager import StateManager
 from sheets_client import SheetsClient
 from drive_client import DriveClient
@@ -62,8 +63,11 @@ def initialize_managers(sheets_client, drive_client, config):
         # Initialize claims manager
         claims_manager = ClaimsManager(sheets_client, drive_client, state_manager, config)
         
+        # Initialize day-off manager
+        dayoff_manager = DayOffManager(sheets_client, state_manager, user_manager)
+        
         logger.info("Application managers initialized successfully")
-        return state_manager, user_manager, claims_manager
+        return state_manager, user_manager, claims_manager, dayoff_manager
         
     except Exception as e:
         logger.error(f"Failed to initialize managers: {e}")
@@ -76,7 +80,7 @@ def start_bot_application(config: Config):
         sheets_client, drive_client = initialize_google_clients(config)
         
         # Initialize managers (synchronous for v13.15)
-        state_manager, user_manager, claims_manager = initialize_managers(
+        state_manager, user_manager, claims_manager, dayoff_manager = initialize_managers(
             sheets_client, drive_client, config
         )
         
@@ -86,6 +90,7 @@ def start_bot_application(config: Config):
             token=config.TELEGRAM_BOT_TOKEN,
             user_manager=user_manager,
             claims_manager=claims_manager,
+            dayoff_manager=dayoff_manager,
             state_manager=state_manager
         )
         
