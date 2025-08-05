@@ -152,11 +152,11 @@ class UserManager:
                 
                 # Return appropriate message based on current state
                 if current_state == UserStateType.REGISTERING_NAME:
-                    message = 'Please enter your real name'
+                    message = '<b>Welcome to PRYMEPLUS Claim System</b> ✨\n\nPlease enter your <b>NAME</b> 📝'
                 elif current_state == UserStateType.REGISTERING_PHONE:
-                    message = 'Please enter your phone number'
+                    message = 'Please enter your <b>PHONE NUMBER</b> 📱'
                 elif current_state == UserStateType.REGISTERING_ROLE:
-                    message = 'Please select your role'
+                    message = 'Please select your <b>ROLE</b> 👤'
                 else:
                     message = 'Please continue to complete the registration process'
                 
@@ -173,7 +173,7 @@ class UserManager:
             logger.info("Started registration process for user %d", user_id)
             return {
                 'success': True,
-                'message': 'Welcome to the Expense Claim System! Please enter your real name',
+                'message': '<b>Welcome to PRYMEPLUS Claim System</b> ✨\n\nPlease enter your <b>NAME</b> 📝',
                 'next_step': UserStateType.REGISTERING_NAME.value,
                 'temp_data': {}
             }
@@ -263,7 +263,7 @@ class UserManager:
             # Success - use validation helper for success response
             success_response = create_validation_success_response(
                 'name', validation_result.value, user_id,
-                "Please enter your phone number:"
+                "Please enter your <b>PHONE NUMBER</b> 📱:"
             )
             
             # Store name and move to phone input
@@ -312,7 +312,7 @@ class UserManager:
             # Success - use validation helper for success response
             success_response = create_validation_success_response(
                 'phone', validation_result.value, user_id,
-                "Please select your role:"
+                "Please select your <b>ROLE</b> 👤:"
             )
             
             # Store phone and move to role selection
@@ -419,7 +419,7 @@ class UserManager:
             logger.info("Successfully completed registration for user %d (%s)", user_id, name)
             return {
                 'success': True,
-                'message': f'Registration successful! Welcome {name}, you can now use /claim command to submit expense claims.',
+                'message': f'<b>Registration successful!!</b> 🎉\n\n<b>PRYMEPLUS</b> welcomes you!! 💖\n\nYou can now use <code>/claim</code> command to submit your Claims.',
                 'next_step': None,
                 'user_data': registration.to_dict()
             }
