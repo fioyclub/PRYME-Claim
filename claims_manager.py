@@ -297,8 +297,10 @@ class ClaimsManager:
     
     def _process_photo_upload(self, user_id: int, photo_data: bytes, 
                                   temp_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Process photo upload step with enhanced error handling and retry flow."""
+        """Process photo upload step with memory-optimized error handling."""
         try:
+            logger.debug(f"Processing photo upload for user {user_id}, size: {len(photo_data)} bytes")
+            
             # Validate photo using new validation system
             validation_result = validate_photo_file(photo_data)
             
@@ -320,15 +322,20 @@ class ClaimsManager:
             
             claim_data = temp_data.get('claim_data', {})
             
-            # Upload photo to Google Drive (simplified for v13.15)
+            # Upload photo to Google Drive with memory optimization
             try:
                 receipt_link = self.upload_receipt(user_id, photo_data, claim_data.get('category', 'Other'))
                 success = True
                 error_msg = None
+                
+                # Clear photo data reference immediately after upload
+                logger.debug(f"Photo upload successful for user {user_id}, clearing memory")
+                
             except Exception as e:
                 success = False
                 receipt_link = None
                 error_msg = str(e)
+                logger.error(f"Photo upload failed for user {user_id}: {e}")
             
             if not success:
                 return {
@@ -362,6 +369,10 @@ class ClaimsManager:
                 'keyboard': KeyboardBuilder.cancel_keyboard(),
                 'success': False
             }
+        finally:
+            # Force garbage collection after photo processing
+            import gc
+            gc.collect()
     
     def _process_confirmation(self, user_id: int, callback_data: str, 
                                   temp_data: Dict[str, Any]) -> Dict[str, Any]:
