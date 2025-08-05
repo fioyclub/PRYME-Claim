@@ -395,6 +395,9 @@ class TelegramBot:
             elif current_state == UserStateType.CLAIMING_AMOUNT:
                 self._handle_claim_text(update, 'amount', text)
             
+            elif current_state == UserStateType.CLAIMING_OTHER_DESCRIPTION:
+                self._handle_claim_text(update, 'other_description', text)
+            
             elif current_state == UserStateType.DAYOFF_DATE:
                 self._handle_dayoff_text(update, 'date', text)
             
