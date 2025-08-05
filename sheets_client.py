@@ -326,7 +326,7 @@ class SheetsClient:
         service = self._get_service()
         
         # Search in all possible role worksheets
-        worksheets = ['Staff', 'Manager', 'Admin']
+        worksheets = ['Staff', 'Manager', 'Ambassador']
         
         for worksheet in worksheets:
             try:
