@@ -26,6 +26,7 @@ class ClaimCategory(Enum):
     FLIGHT = "Flight"
     EVENT = "Event"
     AI = "AI"
+    RECEPTION = "Reception"
     OTHER = "Other"
 
 
