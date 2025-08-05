@@ -60,8 +60,8 @@ def validate_phone_number(phone: str) -> ValidationResult:
         if not phone or not isinstance(phone, str):
             return ValidationResult(
                 is_valid=False,
-                error_message="电话号码不能为空",
-                suggestions=["请输入您的电话号码", "格式示例：+60123456789 或 0123456789"]
+                error_message="Phone number cannot be empty",
+                suggestions=["Please enter your phone number", "Format example: +60123456789 or 0123456789"]
             )
         
         # Remove all spaces and dashes
@@ -70,16 +70,16 @@ def validate_phone_number(phone: str) -> ValidationResult:
         if not cleaned_phone:
             return ValidationResult(
                 is_valid=False,
-                error_message="电话号码不能为空",
-                suggestions=["请输入您的电话号码"]
+                error_message="Phone number cannot be empty",
+                suggestions=["Please enter your phone number"]
             )
         
         # Check for non-digit characters (except + at start)
         if not re.match(r'^\+?\d+$', cleaned_phone):
             return ValidationResult(
                 is_valid=False,
-                error_message="电话号码只能包含数字和开头的+号",
-                suggestions=["请只输入数字和+号", "格式示例：+60123456789"]
+                error_message="Phone number can only contain digits and + at the beginning",
+                suggestions=["Please only enter digits and + sign", "Format example: +60123456789"]
             )
         
         # Malaysian phone number patterns
@@ -99,35 +99,35 @@ def validate_phone_number(phone: str) -> ValidationResult:
         # Provide specific error messages based on common mistakes
         if cleaned_phone.startswith('+60'):
             if len(cleaned_phone) < 11:
-                error_msg = "电话号码太短，+60后需要8-10位数字"
+                error_msg = "Phone number too short, need 8-10 digits after +60"
             elif len(cleaned_phone) > 13:
-                error_msg = "电话号码太长，+60后最多10位数字"
+                error_msg = "Phone number too long, maximum 10 digits after +60"
             else:
-                error_msg = "电话号码格式不正确"
+                error_msg = "Phone number format incorrect"
         elif cleaned_phone.startswith('60'):
             if len(cleaned_phone) < 10:
-                error_msg = "电话号码太短，60后需要8-10位数字"
+                error_msg = "Phone number too short, need 8-10 digits after 60"
             elif len(cleaned_phone) > 12:
-                error_msg = "电话号码太长，60后最多10位数字"
+                error_msg = "Phone number too long, maximum 10 digits after 60"
             else:
-                error_msg = "电话号码格式不正确"
+                error_msg = "Phone number format incorrect"
         elif cleaned_phone.startswith('0'):
             if len(cleaned_phone) < 9:
-                error_msg = "电话号码太短，0后需要8-10位数字"
+                error_msg = "Phone number too short, need 8-10 digits after 0"
             elif len(cleaned_phone) > 11:
-                error_msg = "电话号码太长，0后最多10位数字"
+                error_msg = "Phone number too long, maximum 10 digits after 0"
             else:
-                error_msg = "电话号码格式不正确"
+                error_msg = "Phone number format incorrect"
         else:
-            error_msg = "电话号码必须以+60、60或0开头"
+            error_msg = "Phone number must start with +60, 60 or 0"
         
         return ValidationResult(
             is_valid=False,
             error_message=error_msg,
             suggestions=[
-                "格式示例：+60123456789",
-                "格式示例：0123456789",
-                "请确保号码长度正确"
+                "Format example: +60123456789",
+                "Format example: 0123456789",
+                "Please ensure number length is correct"
             ]
         )
         
@@ -135,8 +135,8 @@ def validate_phone_number(phone: str) -> ValidationResult:
         logger.error(f"Error validating phone number: {e}")
         return ValidationResult(
             is_valid=False,
-            error_message="电话号码验证时出现错误，请重试",
-            suggestions=["请重新输入电话号码"]
+            error_message="Error validating phone number, please try again",
+            suggestions=["Please re-enter phone number"]
         )
 
 
@@ -161,8 +161,8 @@ def validate_amount(amount_str: str) -> ValidationResult:
         if not amount_str or not isinstance(amount_str, str):
             return ValidationResult(
                 is_valid=False,
-                error_message="金额不能为空",
-                suggestions=["请输入金额", "格式示例：50.00 或 RM 100"]
+                error_message="Amount cannot be empty",
+                suggestions=["Please enter amount", "Format example: 50.00 or RM 100"]
             )
         
         # Remove RM prefix and whitespace
@@ -173,8 +173,8 @@ def validate_amount(amount_str: str) -> ValidationResult:
         if not cleaned_amount:
             return ValidationResult(
                 is_valid=False,
-                error_message="请输入具体金额",
-                suggestions=["格式示例：50.00", "格式示例：RM 100"]
+                error_message="Please enter specific amount",
+                suggestions=["Format example: 50.00", "Format example: RM 100"]
             )
         
         # Remove commas for thousands separator
@@ -184,11 +184,11 @@ def validate_amount(amount_str: str) -> ValidationResult:
         if not re.match(r'^\d+\.?\d*$', cleaned_amount):
             return ValidationResult(
                 is_valid=False,
-                error_message="金额只能包含数字和小数点",
+                error_message="Amount can only contain digits and decimal point",
                 suggestions=[
-                    "请只输入数字和小数点",
-                    "格式示例：50.00",
-                    "格式示例：100"
+                    "Please only enter digits and decimal point",
+                    "Format example: 50.00",
+                    "Format example: 100"
                 ]
             )
         
@@ -197,31 +197,31 @@ def validate_amount(amount_str: str) -> ValidationResult:
         except ValueError:
             return ValidationResult(
                 is_valid=False,
-                error_message="请输入有效的数字金额",
+                error_message="Please enter valid numeric amount",
                 suggestions=[
-                    "格式示例：50.00",
-                    "格式示例：RM 100",
-                    "请确保只包含数字和小数点"
+                    "Format example: 50.00",
+                    "Format example: RM 100",
+                    "Please ensure only digits and decimal point"
                 ]
             )
         
         if amount <= 0:
             return ValidationResult(
                 is_valid=False,
-                error_message="金额必须大于零",
+                error_message="Amount must be greater than zero",
                 suggestions=[
-                    "请输入大于0的金额",
-                    "格式示例：10.50"
+                    "Please enter amount greater than 0",
+                    "Format example: 10.50"
                 ]
             )
         
         if amount > 999999.99:
             return ValidationResult(
                 is_valid=False,
-                error_message="金额不能超过 RM 999,999.99",
+                error_message="Amount cannot exceed RM 999,999.99",
                 suggestions=[
-                    "请输入较小的金额",
-                    "如需申请大额报销，请联系管理员"
+                    "Please enter a smaller amount",
+                    "For large expense claims, please contact administrator"
                 ]
             )
         
@@ -234,8 +234,8 @@ def validate_amount(amount_str: str) -> ValidationResult:
         if amount < 0.01:
             return ValidationResult(
                 is_valid=False,
-                error_message="金额不能小于 RM 0.01",
-                suggestions=["请输入至少 RM 0.01 的金额"]
+                error_message="Amount cannot be less than RM 0.01",
+                suggestions=["Please enter at least RM 0.01"]
             )
         
         return ValidationResult(
@@ -247,8 +247,8 @@ def validate_amount(amount_str: str) -> ValidationResult:
         logger.error(f"Error validating amount: {e}")
         return ValidationResult(
             is_valid=False,
-            error_message="金额验证时出现错误，请重试",
-            suggestions=["请重新输入金额"]
+            error_message="Error validating amount, please try again",
+            suggestions=["Please re-enter amount"]
         )
 
 
@@ -287,8 +287,8 @@ def validate_photo_file(file_data: bytes, filename: str = None) -> ValidationRes
         if not file_data:
             return ValidationResult(
                 is_valid=False,
-                error_message="照片文件不能为空",
-                suggestions=["请选择并上传收据照片"]
+                error_message="Photo file cannot be empty",
+                suggestions=["Please select and upload receipt photo"]
             )
         
         # Check file size (max 10MB)
@@ -298,11 +298,11 @@ def validate_photo_file(file_data: bytes, filename: str = None) -> ValidationRes
         if len(file_data) > max_size:
             return ValidationResult(
                 is_valid=False,
-                error_message=f"照片文件大小不能超过 10MB（当前：{file_size_mb:.1f}MB）",
+                error_message=f"Photo file size cannot exceed 10MB (current: {file_size_mb:.1f}MB)",
                 suggestions=[
-                    "请压缩图片后重新上传",
-                    "可以使用手机相机的较低分辨率设置",
-                    "建议文件大小在 1-5MB 之间"
+                    "Please compress image and re-upload",
+                    "Use lower resolution setting on phone camera",
+                    "Recommended file size: 1-5MB"
                 ]
             )
         
@@ -311,10 +311,10 @@ def validate_photo_file(file_data: bytes, filename: str = None) -> ValidationRes
         if len(file_data) < min_size:
             return ValidationResult(
                 is_valid=False,
-                error_message="照片文件太小，请上传有效的图片文件",
+                error_message="Photo file too small, please upload valid image file",
                 suggestions=[
-                    "请确保上传的是完整的图片文件",
-                    "建议文件大小至少 1KB"
+                    "Please ensure uploaded file is complete image",
+                    "Recommended minimum file size: 1KB"
                 ]
             )
         
@@ -326,11 +326,11 @@ def validate_photo_file(file_data: bytes, filename: str = None) -> ValidationRes
             if f'.{file_ext}' not in allowed_extensions:
                 return ValidationResult(
                     is_valid=False,
-                    error_message="请上传有效的图片文件格式",
+                    error_message="Please upload valid image file format",
                     suggestions=[
-                        "支持的格式：JPG, PNG, GIF, BMP, WebP",
-                        "请确保文件扩展名正确",
-                        f"当前文件扩展名：{file_ext or '无'}"
+                        "Supported formats: JPG, PNG, GIF, BMP, WebP",
+                        "Please ensure file extension is correct",
+                        f"Current file extension: {file_ext or 'None'}"
                     ]
                 )
         
@@ -348,22 +348,22 @@ def validate_photo_file(file_data: bytes, filename: str = None) -> ValidationRes
                 if width < 100 or height < 100:
                     return ValidationResult(
                         is_valid=False,
-                        error_message=f"图片尺寸太小（当前：{width}x{height}）",
+                        error_message=f"Image dimensions too small (current: {width}x{height})",
                         suggestions=[
-                            "最小尺寸要求：100x100 像素",
-                            "请使用更高分辨率拍摄收据照片",
-                            "确保收据内容清晰可见"
+                            "Minimum size requirement: 100x100 pixels",
+                            "Please use higher resolution to capture receipt photo",
+                            "Ensure receipt content is clearly visible"
                         ]
                     )
                 
                 if width > 4000 or height > 4000:
                     return ValidationResult(
                         is_valid=False,
-                        error_message=f"图片尺寸太大（当前：{width}x{height}）",
+                        error_message=f"Image dimensions too large (current: {width}x{height})",
                         suggestions=[
-                            "最大尺寸限制：4000x4000 像素",
-                            "请压缩图片或使用较低分辨率",
-                            "建议尺寸：1000x1000 像素以内"
+                            "Maximum size limit: 4000x4000 pixels",
+                            "Please compress image or use lower resolution",
+                            "Recommended size: within 1000x1000 pixels"
                         ]
                     )
                 
@@ -386,25 +386,25 @@ def validate_photo_file(file_data: bytes, filename: str = None) -> ValidationRes
             error_str = str(img_error).lower()
             
             if 'cannot identify image file' in error_str:
-                error_message = "无法识别图片格式，请确保上传的是有效图片文件"
+                error_message = "Cannot identify image format, please ensure uploaded file is valid image"
                 suggestions = [
-                    "请重新拍摄收据照片",
-                    "确保文件没有损坏",
-                    "尝试使用 JPG 或 PNG 格式"
+                    "Please retake receipt photo",
+                    "Ensure file is not corrupted",
+                    "Try using JPG or PNG format"
                 ]
             elif 'truncated' in error_str or 'incomplete' in error_str:
-                error_message = "图片文件不完整或已损坏"
+                error_message = "Image file incomplete or corrupted"
                 suggestions = [
-                    "请重新上传图片",
-                    "确保网络连接稳定",
-                    "尝试重新拍摄照片"
+                    "Please re-upload image",
+                    "Ensure stable network connection",
+                    "Try retaking photo"
                 ]
             else:
-                error_message = "图片文件验证失败，请上传有效的图片"
+                error_message = "Image file validation failed, please upload valid image"
                 suggestions = [
-                    "请重新拍摄收据照片",
-                    "确保使用常见的图片格式（JPG, PNG）",
-                    "检查文件是否完整"
+                    "Please retake receipt photo",
+                    "Ensure using common image formats (JPG, PNG)",
+                    "Check if file is complete"
                 ]
             
             return ValidationResult(
@@ -417,8 +417,8 @@ def validate_photo_file(file_data: bytes, filename: str = None) -> ValidationRes
         logger.error(f"Error validating photo file: {e}")
         return ValidationResult(
             is_valid=False,
-            error_message="照片验证时出现错误，请重试",
-            suggestions=["请重新上传照片"]
+            error_message="Error validating photo, please try again",
+            suggestions=["Please re-upload photo"]
         )
 
 
@@ -443,8 +443,8 @@ def validate_name(name: str) -> ValidationResult:
         if not name or not isinstance(name, str):
             return ValidationResult(
                 is_valid=False,
-                error_message="姓名不能为空",
-                suggestions=["请输入您的真实姓名"]
+                error_message="Name cannot be empty",
+                suggestions=["Please enter your real name"]
             )
         
         name = name.strip()
@@ -452,27 +452,27 @@ def validate_name(name: str) -> ValidationResult:
         if not name:
             return ValidationResult(
                 is_valid=False,
-                error_message="姓名不能为空",
-                suggestions=["请输入您的真实姓名"]
+                error_message="Name cannot be empty",
+                suggestions=["Please enter your real name"]
             )
         
         if len(name) < 2:
             return ValidationResult(
                 is_valid=False,
-                error_message="姓名至少需要2个字符",
+                error_message="Name must be at least 2 characters",
                 suggestions=[
-                    "请输入完整的姓名",
-                    "格式示例：张三 或 John Doe"
+                    "Please enter complete name",
+                    "Format example: Zhang San or John Doe"
                 ]
             )
         
         if len(name) > 50:
             return ValidationResult(
                 is_valid=False,
-                error_message=f"姓名不能超过50个字符（当前：{len(name)}个字符）",
+                error_message=f"Name cannot exceed 50 characters (current: {len(name)} characters)",
                 suggestions=[
-                    "请输入较短的姓名",
-                    "可以使用常用名或简称"
+                    "Please enter shorter name",
+                    "Can use common name or abbreviation"
                 ]
             )
         
@@ -480,10 +480,10 @@ def validate_name(name: str) -> ValidationResult:
         if '  ' in name:  # Multiple consecutive spaces
             return ValidationResult(
                 is_valid=False,
-                error_message="姓名中不能包含多个连续空格",
+                error_message="Name cannot contain multiple consecutive spaces",
                 suggestions=[
-                    "请使用单个空格分隔姓和名",
-                    "格式示例：张 三 或 John Doe"
+                    "Please use single space to separate first and last name",
+                    "Format example: Zhang San or John Doe"
                 ]
             )
         
@@ -495,10 +495,10 @@ def validate_name(name: str) -> ValidationResult:
             
             return ValidationResult(
                 is_valid=False,
-                error_message=f"姓名包含无效字符：{invalid_chars_str}",
+                error_message=f"Name contains invalid characters: {invalid_chars_str}",
                 suggestions=[
-                    "姓名只能包含字母、中文字符、空格、点号、连字符和撇号",
-                    "格式示例：张三、John Doe、Mary-Jane、O'Connor"
+                    "Name can only contain letters, Chinese characters, spaces, dots, hyphens and apostrophes",
+                    "Format examples: Zhang San, John Doe, Mary-Jane, O'Connor"
                 ]
             )
         
@@ -507,10 +507,10 @@ def validate_name(name: str) -> ValidationResult:
         if len(name_no_spaces) < 2:
             return ValidationResult(
                 is_valid=False,
-                error_message="姓名内容太短",
+                error_message="Name content too short",
                 suggestions=[
-                    "请输入至少2个有效字符的姓名",
-                    "不能只包含空格和标点符号"
+                    "Please enter name with at least 2 valid characters",
+                    "Cannot contain only spaces and punctuation"
                 ]
             )
         
@@ -523,8 +523,8 @@ def validate_name(name: str) -> ValidationResult:
         logger.error(f"Error validating name: {e}")
         return ValidationResult(
             is_valid=False,
-            error_message="姓名验证时出现错误，请重试",
-            suggestions=["请重新输入姓名"]
+            error_message="Error validating name, please try again",
+            suggestions=["Please re-enter name"]
         )
 
 
@@ -569,8 +569,8 @@ def validate_telegram_user_id(user_id) -> ValidationResult:
         if user_id is None:
             return ValidationResult(
                 is_valid=False,
-                error_message="用户ID不能为空",
-                suggestions=["请确保从 Telegram 正确获取用户ID"]
+                error_message="User ID cannot be empty",
+                suggestions=["Please ensure user ID is correctly obtained from Telegram"]
             )
         
         if not isinstance(user_id, int):
@@ -581,21 +581,21 @@ def validate_telegram_user_id(user_id) -> ValidationResult:
                 except ValueError:
                     return ValidationResult(
                         is_valid=False,
-                        error_message="用户ID格式无效",
-                        suggestions=["用户ID必须是数字"]
+                        error_message="User ID format invalid",
+                        suggestions=["User ID must be numeric"]
                     )
             else:
                 return ValidationResult(
                     is_valid=False,
-                    error_message="用户ID必须是整数",
-                    suggestions=["请确保用户ID是有效的数字"]
+                    error_message="User ID must be integer",
+                    suggestions=["Please ensure user ID is valid number"]
                 )
         
         if user_id <= 0:
             return ValidationResult(
                 is_valid=False,
-                error_message="用户ID必须是正整数",
-                suggestions=["Telegram 用户ID应该是大于0的数字"]
+                error_message="User ID must be positive integer",
+                suggestions=["Telegram user ID should be number greater than 0"]
             )
         
         # Telegram user IDs are typically large positive integers
@@ -603,16 +603,16 @@ def validate_telegram_user_id(user_id) -> ValidationResult:
         if user_id > 2**63 - 1:
             return ValidationResult(
                 is_valid=False,
-                error_message="用户ID超出有效范围",
-                suggestions=["请检查用户ID是否正确"]
+                error_message="User ID exceeds valid range",
+                suggestions=["Please check if user ID is correct"]
             )
         
         # Check if it's a reasonable Telegram user ID (typically > 1000)
         if user_id < 1000:
             return ValidationResult(
                 is_valid=False,
-                error_message="用户ID似乎不是有效的 Telegram 用户ID",
-                suggestions=["Telegram 用户ID通常是较大的数字"]
+                error_message="User ID does not seem to be valid Telegram user ID",
+                suggestions=["Telegram user IDs are typically larger numbers"]
             )
         
         return ValidationResult(
@@ -624,8 +624,8 @@ def validate_telegram_user_id(user_id) -> ValidationResult:
         logger.error(f"Error validating telegram user ID: {e}")
         return ValidationResult(
             is_valid=False,
-            error_message="用户ID验证时出现错误",
-            suggestions=["请重试或联系管理员"]
+            error_message="Error validating user ID",
+            suggestions=["Please try again or contact administrator"]
         )
 
 
@@ -648,52 +648,52 @@ def get_validation_help_message(field: str) -> str:
     """
     help_messages = {
         'phone': (
-            "📱 电话号码格式帮助：\n\n"
-            "✅ 正确格式：\n"
+            "📱 Phone Number Format Help:\n\n"
+            "✅ Correct formats:\n"
             "• +60123456789\n"
             "• 0123456789\n"
             "• 012-345-6789\n"
             "• 012 345 6789\n\n"
-            "❌ 错误格式：\n"
-            "• 123456789（缺少国家代码或0）\n"
-            "• +60-12-345-6789（格式不标准）"
+            "❌ Incorrect formats:\n"
+            "• 123456789 (missing country code or 0)\n"
+            "• +60-12-345-6789 (non-standard format)"
         ),
         'amount': (
-            "💰 金额格式帮助：\n\n"
-            "✅ 正确格式：\n"
+            "💰 Amount Format Help:\n\n"
+            "✅ Correct formats:\n"
             "• 50\n"
             "• 50.00\n"
             "• RM 50\n"
             "• RM 1,234.56\n\n"
-            "❌ 错误格式：\n"
-            "• -50（负数）\n"
-            "• 50.123（超过2位小数）\n"
-            "• abc（非数字）"
+            "❌ Incorrect formats:\n"
+            "• -50 (negative number)\n"
+            "• 50.123 (more than 2 decimal places)\n"
+            "• abc (non-numeric)"
         ),
         'name': (
-            "👤 姓名格式帮助：\n\n"
-            "✅ 正确格式：\n"
-            "• 张三\n"
+            "👤 Name Format Help:\n\n"
+            "✅ Correct formats:\n"
+            "• Zhang San\n"
             "• John Doe\n"
             "• Mary-Jane\n"
             "• O'Connor\n\n"
-            "❌ 错误格式：\n"
-            "• 张（太短）\n"
-            "• John123（包含数字）\n"
-            "• 张  三（多个空格）"
+            "❌ Incorrect formats:\n"
+            "• Zhang (too short)\n"
+            "• John123 (contains numbers)\n"
+            "• Zhang  San (multiple spaces)"
         ),
         'photo': (
-            "📷 照片格式帮助：\n\n"
-            "✅ 要求：\n"
-            "• 格式：JPG, PNG, GIF, BMP, WebP\n"
-            "• 大小：1KB - 10MB\n"
-            "• 尺寸：100x100 - 4000x4000 像素\n"
-            "• 内容清晰可见\n\n"
-            "💡 建议：\n"
-            "• 使用手机相机拍摄\n"
-            "• 确保收据内容清晰\n"
-            "• 避免模糊或过暗的照片"
+            "📷 Photo Format Help:\n\n"
+            "✅ Requirements:\n"
+            "• Format: JPG, PNG, GIF, BMP, WebP\n"
+            "• Size: 1KB - 10MB\n"
+            "• Dimensions: 100x100 - 4000x4000 pixels\n"
+            "• Content clearly visible\n\n"
+            "💡 Suggestions:\n"
+            "• Use phone camera to capture\n"
+            "• Ensure receipt content is clear\n"
+            "• Avoid blurry or too dark photos"
         )
     }
     
-    return help_messages.get(field, "请按照提示输入正确的信息格式。")
+    return help_messages.get(field, "Please follow the prompts to enter correct information format.")
