@@ -9,6 +9,7 @@ import logging
 import re
 from datetime import datetime
 from typing import Dict, Any, Optional
+import pytz
 from models import DayOffRequest, UserStateType, UserRole
 from state_manager import StateManager
 from sheets_client import SheetsClient
@@ -87,17 +88,29 @@ class DayOffManager:
                 logger.info("User %d is already in day-off request process", user_id)
                 current_state, temp_data = self.state_manager.get_user_state(user_id)
                 
-                if current_state == UserStateType.DAYOFF_DATE:
+                if current_state == UserStateType.DAYOFF_TYPE:
+                    message = '🗓️ Is this a <b>One-day</b> or <b>Multiple-day</b> day-off?\n\nPlease select an option below:'
+                    keyboard = KeyboardBuilder.dayoff_type_keyboard()
+                elif current_state == UserStateType.DAYOFF_DATE:
                     message = '<b>🗓️ Please enter your day-off date</b>\n\nExample: <code>25/08/2025</code> (Use DD/MM/YYYY format)'
+                    keyboard = KeyboardBuilder.cancel_keyboard()
+                elif current_state == UserStateType.DAYOFF_START_DATE:
+                    message = '<b>🗓️ Please enter your <u>Start Date</u></b>\n\nExample: <code>25/08/2025</code> (Use DD/MM/YYYY format)'
+                    keyboard = KeyboardBuilder.cancel_keyboard()
+                elif current_state == UserStateType.DAYOFF_END_DATE:
+                    message = '<b>🗓️ Please enter your <u>End Date</u></b>\n\nExample: <code>27/08/2025</code> (Use DD/MM/YYYY format)'
+                    keyboard = KeyboardBuilder.cancel_keyboard()
                 elif current_state == UserStateType.DAYOFF_REASON:
                     message = '<b>✏️ Please enter your reason for this day-off</b>\n\nExample: <i>Family event</i>, <i>Medical appointment</i>, etc.'
+                    keyboard = KeyboardBuilder.cancel_keyboard()
                 else:
                     message = 'Please continue to complete the day-off request process'
+                    keyboard = KeyboardBuilder.cancel_keyboard()
                 
                 return {
                     'success': True,
                     'message': message,
-                    'keyboard': KeyboardBuilder.cancel_keyboard()
+                    'keyboard': keyboard
                 }
             
             # Check if user is in other processes
@@ -109,14 +122,14 @@ class DayOffManager:
                     'keyboard': None
                 }
             
-            # Start new day-off request process
-            self.state_manager.set_user_state(user_id, UserStateType.DAYOFF_DATE)
+            # Start new day-off request process with type selection
+            self.state_manager.set_user_state(user_id, UserStateType.DAYOFF_TYPE)
             
             logger.info("Started day-off request process for user %d (%s)", user_id, user_data.name)
             return {
                 'success': True,
-                'message': '<b>🗓️ Please enter your day-off date</b>\n\nExample: <code>25/08/2025</code> (Use DD/MM/YYYY format)',
-                'keyboard': KeyboardBuilder.cancel_keyboard()
+                'message': '🗓️ Is this a <b>One-day</b> or <b>Multiple-day</b> day-off?\n\nPlease select an option below:',
+                'keyboard': KeyboardBuilder.dayoff_type_keyboard()
             }
             
         except Exception as e:
@@ -133,7 +146,7 @@ class DayOffManager:
         
         Args:
             user_id: Telegram user ID
-            step: Current step (date or reason)
+            step: Current step (type, date, start_date, end_date, or reason)
             data: User input data
             
         Returns:
@@ -153,7 +166,13 @@ class DayOffManager:
             
             # Process based on current step
             if step == 'date' or current_state == UserStateType.DAYOFF_DATE:
-                return self._process_date_input(user_id, data, temp_data)
+                return self._process_single_date_input(user_id, data, temp_data)
+            
+            elif step == 'start_date' or current_state == UserStateType.DAYOFF_START_DATE:
+                return self._process_start_date_input(user_id, data, temp_data)
+            
+            elif step == 'end_date' or current_state == UserStateType.DAYOFF_END_DATE:
+                return self._process_end_date_input(user_id, data, temp_data)
             
             elif step == 'reason' or current_state == UserStateType.DAYOFF_REASON:
                 return self._process_reason_input(user_id, data, temp_data)
@@ -174,8 +193,70 @@ class DayOffManager:
                 'keyboard': KeyboardBuilder.cancel_keyboard()
             }
     
-    def _process_date_input(self, user_id: int, date_str: str, temp_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Process date input step."""
+    def process_dayoff_type_selection(self, user_id: int, dayoff_type: str) -> Dict[str, Any]:
+        """
+        Process day-off type selection (one-day or multiple-day).
+        
+        Args:
+            user_id: Telegram user ID
+            dayoff_type: Selected type ('oneday' or 'multiday')
+            
+        Returns:
+            Dictionary with processing result
+        """
+        try:
+            current_state, temp_data = self.state_manager.get_user_state(user_id)
+            
+            # Validate that user is in type selection state
+            if current_state != UserStateType.DAYOFF_TYPE:
+                logger.warning("User %d not in type selection state", user_id)
+                return {
+                    'success': False,
+                    'message': 'Please use /dayoff command first to start day-off request.',
+                    'keyboard': None
+                }
+            
+            # Store type and move to appropriate next step
+            self.state_manager.update_user_data(user_id, 'dayoff_type', dayoff_type)
+            
+            if dayoff_type == 'oneday':
+                # Move to single date input
+                self.state_manager.set_user_state(user_id, UserStateType.DAYOFF_DATE)
+                logger.info("User %d selected one-day, moving to date input", user_id)
+                return {
+                    'success': True,
+                    'message': '<b>🗓️ Please enter your day-off date</b>\n\nExample: <code>25/08/2025</code> (Use DD/MM/YYYY format)',
+                    'keyboard': KeyboardBuilder.cancel_keyboard()
+                }
+            
+            elif dayoff_type == 'multiday':
+                # Move to start date input
+                self.state_manager.set_user_state(user_id, UserStateType.DAYOFF_START_DATE)
+                logger.info("User %d selected multiple-day, moving to start date input", user_id)
+                return {
+                    'success': True,
+                    'message': '<b>🗓️ Please enter your <u>Start Date</u></b>\n\nExample: <code>25/08/2025</code> (Use DD/MM/YYYY format)',
+                    'keyboard': KeyboardBuilder.cancel_keyboard()
+                }
+            
+            else:
+                logger.warning("Invalid day-off type %s from user %d", dayoff_type, user_id)
+                return {
+                    'success': False,
+                    'message': 'Invalid selection, please choose One-day or Multiple-day.',
+                    'keyboard': KeyboardBuilder.dayoff_type_keyboard()
+                }
+                
+        except Exception as e:
+            logger.error("Error processing day-off type selection for user %d: %s", user_id, e)
+            return {
+                'success': False,
+                'message': 'Error processing selection, please try again.',
+                'keyboard': KeyboardBuilder.dayoff_type_keyboard()
+            }
+    
+    def _process_single_date_input(self, user_id: int, date_str: str, temp_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Process single date input step for one-day requests."""
         try:
             # Validate date format (DD/MM/YYYY)
             if not self._validate_date_format(date_str):
@@ -190,7 +271,7 @@ class DayOffManager:
             self.state_manager.update_user_data(user_id, 'dayoff_date', date_str.strip())
             self.state_manager.set_user_state(user_id, UserStateType.DAYOFF_REASON)
             
-            logger.info("User %d provided valid date, moving to reason input", user_id)
+            logger.info("User %d provided valid single date, moving to reason input", user_id)
             return {
                 'success': True,
                 'message': '<b>✏️ Please enter your reason for this day-off</b>\n\nExample: <i>Family event</i>, <i>Medical appointment</i>, etc.',
@@ -198,10 +279,95 @@ class DayOffManager:
             }
             
         except Exception as e:
-            self.error_handler.log_error_details(e, "dayoff_date_processing", user_id)
+            self.error_handler.log_error_details(e, "dayoff_single_date_processing", user_id)
             return {
                 'success': False,
                 'message': '❌ Error processing date, please try again',
+                'keyboard': KeyboardBuilder.cancel_keyboard()
+            }
+    
+    def _process_start_date_input(self, user_id: int, date_str: str, temp_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Process start date input step for multiple-day requests."""
+        try:
+            # Validate date format (DD/MM/YYYY)
+            if not self._validate_date_format(date_str):
+                logger.info("Invalid start date format from user %d: %s", user_id, date_str)
+                return {
+                    'success': False,
+                    'message': '❌ Invalid date format. Please use DD/MM/YYYY format.\n\nExample: <code>25/08/2025</code>',
+                    'keyboard': KeyboardBuilder.cancel_keyboard()
+                }
+            
+            # Store start date and move to end date input
+            self.state_manager.update_user_data(user_id, 'start_date', date_str.strip())
+            self.state_manager.set_user_state(user_id, UserStateType.DAYOFF_END_DATE)
+            
+            logger.info("User %d provided valid start date, moving to end date input", user_id)
+            return {
+                'success': True,
+                'message': '<b>🗓️ Please enter your <u>End Date</u></b>\n\nExample: <code>27/08/2025</code> (Use DD/MM/YYYY format)',
+                'keyboard': KeyboardBuilder.cancel_keyboard()
+            }
+            
+        except Exception as e:
+            self.error_handler.log_error_details(e, "dayoff_start_date_processing", user_id)
+            return {
+                'success': False,
+                'message': '❌ Error processing start date, please try again',
+                'keyboard': KeyboardBuilder.cancel_keyboard()
+            }
+    
+    def _process_end_date_input(self, user_id: int, date_str: str, temp_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Process end date input step for multiple-day requests."""
+        try:
+            # Validate date format (DD/MM/YYYY)
+            if not self._validate_date_format(date_str):
+                logger.info("Invalid end date format from user %d: %s", user_id, date_str)
+                return {
+                    'success': False,
+                    'message': '❌ Invalid date format. Please use DD/MM/YYYY format.\n\nExample: <code>27/08/2025</code>',
+                    'keyboard': KeyboardBuilder.cancel_keyboard()
+                }
+            
+            # Get start date for validation
+            start_date_str = temp_data.get('start_date')
+            if not start_date_str:
+                logger.error("Missing start date for user %d", user_id)
+                return {
+                    'success': False,
+                    'message': 'Error: Missing start date. Please restart with /dayoff.',
+                    'keyboard': None
+                }
+            
+            # Validate that end date is after start date
+            if not self._validate_date_range(start_date_str, date_str.strip()):
+                logger.info("Invalid date range from user %d: %s to %s", user_id, start_date_str, date_str)
+                return {
+                    'success': False,
+                    'message': '❌ End date must be after start date. Please enter a valid end date.\n\nExample: <code>27/08/2025</code>',
+                    'keyboard': KeyboardBuilder.cancel_keyboard()
+                }
+            
+            # Store end date and create combined date string
+            end_date = date_str.strip()
+            combined_date = f"{start_date_str} - {end_date}"
+            
+            self.state_manager.update_user_data(user_id, 'end_date', end_date)
+            self.state_manager.update_user_data(user_id, 'dayoff_date', combined_date)
+            self.state_manager.set_user_state(user_id, UserStateType.DAYOFF_REASON)
+            
+            logger.info("User %d provided valid end date, moving to reason input", user_id)
+            return {
+                'success': True,
+                'message': '<b>✏️ Please enter your reason for this day-off</b>\n\nExample: <i>Family event</i>, <i>Medical appointment</i>, etc.',
+                'keyboard': KeyboardBuilder.cancel_keyboard()
+            }
+            
+        except Exception as e:
+            self.error_handler.log_error_details(e, "dayoff_end_date_processing", user_id)
+            return {
+                'success': False,
+                'message': '❌ Error processing end date, please try again',
                 'keyboard': KeyboardBuilder.cancel_keyboard()
             }
     
@@ -260,9 +426,12 @@ class DayOffManager:
                     'keyboard': None
                 }
             
-            # Create DayOffRequest object
+            # Create DayOffRequest object with Malaysia timezone
+            malaysia_tz = pytz.timezone('Asia/Kuala_Lumpur')
+            request_date_malaysia = datetime.now(malaysia_tz)
+            
             dayoff_request = DayOffRequest(
-                request_date=datetime.now(),
+                request_date=request_date_malaysia,
                 dayoff_date=dayoff_date,
                 reason=reason,
                 submitted_by=user_id,
@@ -377,6 +546,37 @@ class DayOffManager:
             # Try to create datetime to validate the date
             datetime(year, month, day)
             return True
+            
+        except (ValueError, TypeError):
+            return False
+    
+    def _validate_date_range(self, start_date_str: str, end_date_str: str) -> bool:
+        """
+        Validate that end date is after start date.
+        
+        Args:
+            start_date_str: Start date string (DD/MM/YYYY)
+            end_date_str: End date string (DD/MM/YYYY)
+            
+        Returns:
+            True if date range is valid
+        """
+        try:
+            # Parse both dates
+            start_parts = start_date_str.split('/')
+            end_parts = end_date_str.split('/')
+            
+            if len(start_parts) != 3 or len(end_parts) != 3:
+                return False
+            
+            start_day, start_month, start_year = map(int, start_parts)
+            end_day, end_month, end_year = map(int, end_parts)
+            
+            start_date = datetime(start_year, start_month, start_day)
+            end_date = datetime(end_year, end_month, end_day)
+            
+            # End date must be after start date
+            return end_date > start_date
             
         except (ValueError, TypeError):
             return False
