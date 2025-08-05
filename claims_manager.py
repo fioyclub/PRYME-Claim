@@ -380,9 +380,86 @@ class ClaimsManager:
             logger.error(f"Failed to upload receipt for user {user_id}: {e}")
             raise
     
+    def _format_datetime_local(self, dt: datetime) -> str:
+        """
+        Format datetime to local format: 5/8/2025 1:56pm
+        
+        Args:
+            dt: datetime object
+            
+        Returns:
+            str: Formatted datetime string
+        """
+        # Format: M/D/YYYY H:MMam/pm (cross-platform compatible)
+        month = dt.month
+        day = dt.day
+        year = dt.year
+        hour = dt.hour
+        minute = dt.minute
+        
+        # Convert to 12-hour format
+        if hour == 0:
+            hour_12 = 12
+            ampm = 'am'
+        elif hour < 12:
+            hour_12 = hour
+            ampm = 'am'
+        elif hour == 12:
+            hour_12 = 12
+            ampm = 'pm'
+        else:
+            hour_12 = hour - 12
+            ampm = 'pm'
+        
+        return f"{month}/{day}/{year} {hour_12}:{minute:02d}{ampm}"
+    
+    def _get_user_name(self, user_id: int) -> str:
+        """
+        Get user's registered name by user_id
+        
+        Args:
+            user_id: Telegram user ID
+            
+        Returns:
+            str: User's registered name or user_id as fallback
+        """
+        try:
+            # Get user data from sheets_client
+            user_data = self.sheets_client._get_user_sync(user_id)
+            if user_data and 'name' in user_data:
+                return user_data['name']
+            else:
+                logger.warning(f"User name not found for user_id {user_id}, using user_id as fallback")
+                return str(user_id)
+        except Exception as e:
+            logger.error(f"Error getting user name for user_id {user_id}: {e}")
+            return str(user_id)
+    
+    def _get_user_role(self, user_id: int) -> str:
+        """
+        Get user's role by user_id
+        
+        Args:
+            user_id: Telegram user ID
+            
+        Returns:
+            str: User's role (Staff/Manager/Ambassador) or 'Staff' as fallback
+        """
+        try:
+            # Get user data from sheets_client
+            user_data = self.sheets_client._get_user_sync(user_id)
+            if user_data and 'role' in user_data:
+                return user_data['role']
+            else:
+                logger.warning(f"User role not found for user_id {user_id}, using 'Staff' as fallback")
+                return 'Staff'
+        except Exception as e:
+            logger.error(f"Error getting user role for user_id {user_id}: {e}")
+            return 'Staff'
+
     def submit_claim(self, user_id: int, claim_data: Dict[str, Any]) -> bool:
         """
-        Submit claim to Google Sheets.
+        Submit claim to role-specific Google Sheets with formatted data.
         
         Args:
             user_id: Telegram user ID
@@ -392,6 +469,10 @@ class ClaimsManager:
             bool: True if submission was successful
         """
         try:
+            # Get user information
+            user_name = self._get_user_name(user_id)
+            user_role = self._get_user_role(user_id)
+            
             # Create claim object
             claim = Claim(
                 date=datetime.now(),
@@ -402,22 +483,26 @@ class ClaimsManager:
                 status=ClaimStatus.PENDING
             )
             
-            # Submit to Google Sheets (using sync method)
-            claim_dict = claim.to_dict()
+            # Format data for Google Sheets
+            formatted_date = self._format_datetime_local(claim.date)
+            
             values = [
-                claim_dict['date'],
-                claim_dict['category'],
-                claim_dict['amount'],
-                claim_dict['receipt_link'],
-                claim_dict['submitted_by'],
-                claim_dict['status']
+                formatted_date,                    # Date in local format
+                claim.category.value,              # Category
+                claim.amount,                      # Amount
+                claim.receipt_link,                # Receipt Link
+                user_name,                         # Submitted By (user name)
+                claim.status.value                 # Status
             ]
-            success = self.sheets_client._append_data_sync('Claims', [values], 'A:F')
+            
+            # Submit to role-specific sheet
+            worksheet_name = user_role  # 'Staff', 'Manager', or 'Ambassador'
+            success = self.sheets_client._append_data_sync(worksheet_name, [values], 'A:F')
             
             if success:
-                logger.info(f"Successfully submitted claim for user {user_id}")
+                logger.info(f"Successfully submitted claim for user {user_id} ({user_name}) to {worksheet_name} sheet")
             else:
-                logger.error(f"Failed to submit claim for user {user_id}")
+                logger.error(f"Failed to submit claim for user {user_id} ({user_name}) to {worksheet_name} sheet")
             
             return success
             
