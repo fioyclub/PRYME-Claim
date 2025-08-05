@@ -531,7 +531,7 @@ class UserManager:
             role_hierarchy = {
                 UserRole.STAFF: 1,
                 UserRole.MANAGER: 2,
-                UserRole.ADMIN: 3
+                UserRole.AMBASSADOR: 3
             }
             
             user_level = role_hierarchy.get(user_data.role, 0)
