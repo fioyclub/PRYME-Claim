@@ -11,6 +11,7 @@ from telegram import ParseMode
 
 from user_manager import UserManager
 from claims_manager import ClaimsManager
+from dayoff_manager import DayOffManager
 from state_manager import StateManager
 from models import UserStateType
 from keyboards import KeyboardBuilder
@@ -23,7 +24,7 @@ class TelegramBot:
     """Main Telegram Bot handler class for v13.15"""
     
     def __init__(self, token: str, user_manager: UserManager, claims_manager: ClaimsManager, 
-                 state_manager: StateManager):
+                 dayoff_manager: DayOffManager, state_manager: StateManager):
         """
         Initialize bot with token and required managers
         
@@ -31,11 +32,13 @@ class TelegramBot:
             token: Telegram bot token
             user_manager: User management instance
             claims_manager: Claims management instance
+            dayoff_manager: Day-off management instance
             state_manager: State management instance
         """
         self.token = token
         self.user_manager = user_manager
         self.claims_manager = claims_manager
+        self.dayoff_manager = dayoff_manager
         self.state_manager = state_manager
         self.error_handler = global_error_handler
         
@@ -54,6 +57,7 @@ class TelegramBot:
         self.dispatcher.add_handler(CommandHandler("start", self.handle_start_command))
         self.dispatcher.add_handler(CommandHandler("register", self.handle_register_command))
         self.dispatcher.add_handler(CommandHandler("claim", self.handle_claim_command))
+        self.dispatcher.add_handler(CommandHandler("dayoff", self.handle_dayoff_command))
         self.dispatcher.add_handler(CommandHandler("help", self.handle_help_command))
         
         # Callback query handler for inline keyboards
@@ -183,7 +187,8 @@ class TelegramBot:
                 f"<b>📋 Available Commands:</b>\n"
                 f"• <code>/register</code> - Register your information 📝\n"
                 f"• <code>/claim</code> - Submit your expense claim 💰\n"
-                f"• <code>/help</code> - View help information ℹ️\n\n"
+                f"• <code>/help</code> - View help information ℹ️\n"
+                f"• <code>/dayoff</code> - Request Day-off 🗓️\n\n"
                 f"<b>🚀 Let's get started!</b>"
             )
             
@@ -201,17 +206,19 @@ class TelegramBot:
         """Handle /help command"""
         try:
             help_message = (
-                "📋 <b>Expense Claim System Help</b>\n\n"
+                "📋 <b>PRYMEPLUS System Help</b>\n\n"
                 "<b>Available Commands:</b>\n"
                 "• /start - Start using the system\n"
                 "• /register - Register user information\n"
                 "• /claim - Submit expense claim\n"
+                "• /dayoff - Request Day-off 🗓️\n"
                 "• /help - Show this help information\n\n"
                 "<b>Usage Flow:</b>\n"
                 "1. Use /register to register your information\n"
                 "2. Use /claim to submit expense claim\n"
-                "3. Select category, enter amount, upload receipt\n"
-                "4. Confirm and submit claim\n\n"
+                "3. Use /dayoff to request day-off (Staff & Manager only)\n"
+                "4. Select category, enter amount, upload receipt\n"
+                "5. Confirm and submit claim\n\n"
                 "<b>Supported Expense Categories:</b>\n"
                 "• 🍔 Food - Food expenses\n"
                 "• 🚗 Transportation - Transportation costs\n"
@@ -220,6 +227,10 @@ class TelegramBot:
                 "• 🤖 AI - AI tool expenses\n"
                 "• 🎪 Reception - Reception expenses\n"
                 "• 📦 Other - Other expenses\n\n"
+                "<b>Day-off Request:</b>\n"
+                "• Available for Staff and Manager roles only\n"
+                "• Use DD/MM/YYYY date format\n"
+                "• Provide clear reason for request\n\n"
                 "If you have any questions, please contact the administrator."
             )
             
@@ -288,6 +299,33 @@ class TelegramBot:
             logger.error(f"Error handling claim command: {e}")
             self._send_error_message(update, "Failed to process claim command, please try again later.")
     
+    def handle_dayoff_command(self, update: Update, context):
+        """Handle /dayoff command"""
+        try:
+            user_id = update.effective_user.id
+            
+            logger.info(f"User {user_id} initiated day-off request")
+            
+            # Start day-off request process
+            result = self.dayoff_manager.start_dayoff_request(user_id)
+            
+            if result['success']:
+                update.message.reply_text(
+                    result['message'],
+                    reply_markup=result.get('keyboard'),
+                    parse_mode=ParseMode.HTML
+                )
+            else:
+                update.message.reply_text(
+                    result['message'],
+                    reply_markup=result.get('keyboard'),
+                    parse_mode=ParseMode.HTML
+                )
+                
+        except Exception as e:
+            logger.error(f"Error handling dayoff command: {e}")
+            self._send_error_message(update, "Failed to process day-off command, please try again later.")
+    
     def handle_callback_query(self, update: Update, context):
         """Handle inline keyboard callbacks"""
         try:
@@ -353,6 +391,12 @@ class TelegramBot:
             
             elif current_state == UserStateType.CLAIMING_AMOUNT:
                 self._handle_claim_text(update, 'amount', text)
+            
+            elif current_state == UserStateType.DAYOFF_DATE:
+                self._handle_dayoff_text(update, 'date', text)
+            
+            elif current_state == UserStateType.DAYOFF_REASON:
+                self._handle_dayoff_text(update, 'reason', text)
             
             elif current_state == UserStateType.IDLE:
                 # User sent text while idle - provide guidance
@@ -587,6 +631,10 @@ class TelegramBot:
             result = self.claims_manager.cancel_claim_process(user_id)
             self._safe_edit_message(query, result['message'], result.get('keyboard'))
         
+        elif self.state_manager.is_user_requesting_dayoff(user_id):
+            result = self.dayoff_manager.cancel_dayoff_request(user_id)
+            self._safe_edit_message(query, result['message'], result.get('keyboard'))
+        
         else:
             self._safe_edit_message(query, "No ongoing operation to cancel.")
     
@@ -621,6 +669,20 @@ class TelegramBot:
         update.message.reply_text(
             result['message'],
             reply_markup=result.get('keyboard')
+        )
+    
+    def _handle_dayoff_text(self, update, field, text):
+        """Handle text input during day-off request process"""
+        user_id = update.effective_user.id
+        
+        result = self.dayoff_manager.process_dayoff_step(
+            user_id, field, text
+        )
+        
+        update.message.reply_text(
+            result['message'],
+            reply_markup=result.get('keyboard'),
+            parse_mode=ParseMode.HTML
         )
     
     def _send_error_message(self, update, message):
