@@ -440,7 +440,7 @@ class TelegramBot:
         role_mapping = {
             'staff': 'Staff',
             'manager': 'Manager', 
-            'admin': 'Admin'
+            'ambassador': 'Ambassador'
         }
         mapped_role = role_mapping.get(role, role)
         result = self.user_manager.process_registration_step(
