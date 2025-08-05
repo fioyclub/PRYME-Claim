@@ -280,7 +280,8 @@ class SheetsClient:
             
             # Add headers if worksheet is empty
             if not values:
-                if worksheet == "Claims":
+                if worksheet in ["Claims", "Staff", "Manager", "Ambassador"]:
+                    # Claims worksheets (including role-specific ones)
                     headers = [['Date', 'Category', 'Amount', 'Receipt Link', 'Submitted By', 'Status']]
                 else:
                     # Registration worksheets
