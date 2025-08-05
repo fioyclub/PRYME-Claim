@@ -360,6 +360,9 @@ class TelegramBot:
             elif callback_data == 'register_now':
                 self._handle_register_now_callback(query)
             
+            elif callback_data.startswith('dayoff_type_'):
+                self._handle_dayoff_type_callback(query, callback_data, current_state, temp_data)
+            
             elif callback_data == 'cancel':
                 self._handle_cancel_callback(query, current_state)
             
@@ -394,6 +397,12 @@ class TelegramBot:
             
             elif current_state == UserStateType.DAYOFF_DATE:
                 self._handle_dayoff_text(update, 'date', text)
+            
+            elif current_state == UserStateType.DAYOFF_START_DATE:
+                self._handle_dayoff_text(update, 'start_date', text)
+            
+            elif current_state == UserStateType.DAYOFF_END_DATE:
+                self._handle_dayoff_text(update, 'end_date', text)
             
             elif current_state == UserStateType.DAYOFF_REASON:
                 self._handle_dayoff_text(update, 'reason', text)
@@ -618,6 +627,19 @@ class TelegramBot:
             self._safe_edit_message(query, result['message'], keyboard)
         else:
             self._safe_edit_message(query, result['message'])
+    
+    def _handle_dayoff_type_callback(self, query, callback_data, current_state, temp_data):
+        """Handle day-off type selection callback"""
+        if current_state != UserStateType.DAYOFF_TYPE:
+            self._safe_edit_message(query, "Please use /dayoff command first to start day-off request.")
+            return
+        
+        dayoff_type = callback_data.replace('dayoff_type_', '')
+        result = self.dayoff_manager.process_dayoff_type_selection(
+            query.from_user.id, dayoff_type
+        )
+        
+        self._safe_edit_message(query, result['message'], result.get('keyboard'))
     
     def _handle_cancel_callback(self, query, current_state):
         """Handle cancel callback"""
