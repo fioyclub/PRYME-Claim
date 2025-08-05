@@ -98,8 +98,9 @@ def start_bot_application(config: Config):
         
         # Start the bot based on deployment mode
         if config.WEBHOOK_URL:
-            # Production mode with webhook
-            logger.info(f"Starting webhook mode on {config.WEBHOOK_URL}:{config.PORT}")
+            # Production mode with webhook (Gunicorn handles Flask server)
+            logger.info(f"Setting webhook for production deployment: {config.WEBHOOK_URL}")
+            logger.info("Note: Use 'gunicorn -c gunicorn.conf.py app:app' to start the server")
             bot.start_webhook(config.WEBHOOK_URL, config.PORT)
         else:
             # Development mode with polling
