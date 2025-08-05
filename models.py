@@ -47,6 +47,8 @@ class UserStateType(Enum):
     CLAIMING_AMOUNT = "CLAIMING_AMOUNT"
     CLAIMING_PHOTO = "CLAIMING_PHOTO"
     CLAIMING_CONFIRM = "CLAIMING_CONFIRM"
+    DAYOFF_DATE = "DAYOFF_DATE"
+    DAYOFF_REASON = "DAYOFF_REASON"
 
 
 @dataclass
@@ -167,6 +169,57 @@ class Claim:
     def from_json(cls, json_str: str) -> 'Claim':
         """Create instance from JSON string."""
         return cls.from_dict(json.loads(json_str))
+
+
+@dataclass
+class DayOffRequest:
+    """Day-off request data model."""
+    request_date: datetime
+    dayoff_date: str  # DD/MM/YYYY format
+    reason: str
+    submitted_by: int
+    submitted_by_name: str
+    status: str = "Pending"
+    
+    def __post_init__(self):
+        """Validate data after initialization."""
+        if not isinstance(self.request_date, datetime):
+            raise ValueError("request_date must be a datetime object")
+        
+        if not self.dayoff_date or not self.dayoff_date.strip():
+            raise ValueError("dayoff_date cannot be empty")
+        
+        if not self.reason or not self.reason.strip():
+            raise ValueError("reason cannot be empty")
+        
+        if not isinstance(self.submitted_by, int) or self.submitted_by <= 0:
+            raise ValueError("submitted_by must be a positive integer")
+        
+        if not self.submitted_by_name or not self.submitted_by_name.strip():
+            raise ValueError("submitted_by_name cannot be empty")
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for serialization."""
+        return {
+            'request_date': self.request_date.isoformat(),
+            'dayoff_date': self.dayoff_date,
+            'reason': self.reason,
+            'submitted_by': self.submitted_by,
+            'submitted_by_name': self.submitted_by_name,
+            'status': self.status
+        }
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'DayOffRequest':
+        """Create instance from dictionary."""
+        return cls(
+            request_date=datetime.fromisoformat(data['request_date']),
+            dayoff_date=data['dayoff_date'],
+            reason=data['reason'],
+            submitted_by=data['submitted_by'],
+            submitted_by_name=data['submitted_by_name'],
+            status=data.get('status', 'Pending')
+        )
 
 
 @dataclass
