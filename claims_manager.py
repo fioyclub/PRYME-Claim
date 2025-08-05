@@ -8,7 +8,7 @@ with comprehensive error handling.
 
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from typing import Dict, Optional, Any, Tuple, List
 from io import BytesIO
 
@@ -382,20 +382,30 @@ class ClaimsManager:
     
     def _format_datetime_local(self, dt: datetime) -> str:
         """
-        Format datetime to local format: 5/8/2025 1:56pm
+        Format datetime to Malaysia timezone format: 5/8/2025 2:20pm
         
         Args:
-            dt: datetime object
+            dt: datetime object (UTC)
             
         Returns:
-            str: Formatted datetime string
+            str: Formatted datetime string in Malaysia timezone
         """
+        # Convert UTC to Malaysia timezone (GMT+8)
+        malaysia_tz = timezone(timedelta(hours=8))
+        
+        # If datetime is naive (no timezone), assume it's UTC
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        
+        # Convert to Malaysia time
+        malaysia_dt = dt.astimezone(malaysia_tz)
+        
         # Format: M/D/YYYY H:MMam/pm (cross-platform compatible)
-        month = dt.month
-        day = dt.day
-        year = dt.year
-        hour = dt.hour
-        minute = dt.minute
+        month = malaysia_dt.month
+        day = malaysia_dt.day
+        year = malaysia_dt.year
+        hour = malaysia_dt.hour
+        minute = malaysia_dt.minute
         
         # Convert to 12-hour format
         if hour == 0:
@@ -495,8 +505,8 @@ class ClaimsManager:
                 claim.status.value                 # Status
             ]
             
-            # Submit to role-specific sheet
-            worksheet_name = user_role  # 'Staff', 'Manager', or 'Ambassador'
+            # Submit to role-specific Claims sheet
+            worksheet_name = f"{user_role} Claims"  # 'Staff Claims', 'Manager Claims', or 'Ambassador Claims'
             success = self.sheets_client._append_data_sync(worksheet_name, [values], 'A:F')
             
             if success:
