@@ -159,7 +159,7 @@ class TelegramBot:
         """Handle /start command"""
         try:
             user_id = update.effective_user.id
-            user_name = update.effective_user.first_name or "用户"
+            user_name = update.effective_user.first_name or "User"
             
             logger.info(f"User {user_id} ({user_name}) started bot")
             
@@ -168,18 +168,18 @@ class TelegramBot:
             
             if is_registered:
                 message = (
-                    f"欢迎回来，{user_name}！👋\n\n"
-                    "你已经注册过了，可以直接使用以下功能：\n"
-                    "• /claim - 提交报销申请\n"
-                    "• /help - 查看帮助信息"
+                    f"Welcome back, {user_name}! 👋\n\n"
+                    "You are already registered and can use the following features:\n"
+                    "• /claim - Submit expense claim\n"
+                    "• /help - View help information"
                 )
                 keyboard = KeyboardBuilder.claim_complete_keyboard()
             else:
                 message = (
-                    f"欢迎使用报销申请系统，{user_name}！👋\n\n"
-                    "请先注册你的信息才能使用系统：\n"
-                    "• /register - 注册用户信息\n"
-                    "• /help - 查看帮助信息"
+                    f"Welcome to the Expense Claim System, {user_name}! 👋\n\n"
+                    "Please register your information first to use the system:\n"
+                    "• /register - Register user information\n"
+                    "• /help - View help information"
                 )
                 keyboard = KeyboardBuilder.registration_complete_keyboard()
             
@@ -191,31 +191,31 @@ class TelegramBot:
             
         except Exception as e:
             logger.error(f"Error handling start command: {e}")
-            self._send_error_message(update, "启动命令处理失败，请稍后重试。")
+            self._send_error_message(update, "Failed to process start command, please try again later.")
     
     def handle_help_command(self, update: Update, context):
         """Handle /help command"""
         try:
             help_message = (
-                "📋 <b>报销申请系统帮助</b>\n\n"
-                "<b>可用命令：</b>\n"
-                "• /start - 开始使用系统\n"
-                "• /register - 注册用户信息\n"
-                "• /claim - 提交报销申请\n"
-                "• /help - 显示此帮助信息\n\n"
-                "<b>使用流程：</b>\n"
-                "1. 使用 /register 注册你的信息\n"
-                "2. 使用 /claim 提交报销申请\n"
-                "3. 选择类别、输入金额、上传收据\n"
-                "4. 确认提交申请\n\n"
-                "<b>支持的报销类别：</b>\n"
-                "• 🍔 Food - 餐饮费用\n"
-                "• 🚗 Transportation - 交通费用\n"
-                "• ✈️ Flight - 机票费用\n"
-                "• 🎉 Event - 活动费用\n"
-                "• 🤖 AI - AI工具费用\n"
-                "• 📦 Other - 其他费用\n\n"
-                "如有问题，请联系管理员。"
+                "📋 <b>Expense Claim System Help</b>\n\n"
+                "<b>Available Commands:</b>\n"
+                "• /start - Start using the system\n"
+                "• /register - Register user information\n"
+                "• /claim - Submit expense claim\n"
+                "• /help - Show this help information\n\n"
+                "<b>Usage Flow:</b>\n"
+                "1. Use /register to register your information\n"
+                "2. Use /claim to submit expense claim\n"
+                "3. Select category, enter amount, upload receipt\n"
+                "4. Confirm and submit claim\n\n"
+                "<b>Supported Expense Categories:</b>\n"
+                "• 🍔 Food - Food expenses\n"
+                "• 🚗 Transportation - Transportation costs\n"
+                "• ✈️ Flight - Flight expenses\n"
+                "• 🎉 Event - Event costs\n"
+                "• 🤖 AI - AI tool expenses\n"
+                "• 📦 Other - Other expenses\n\n"
+                "If you have any questions, please contact the administrator."
             )
             
             update.message.reply_text(
@@ -225,7 +225,7 @@ class TelegramBot:
             
         except Exception as e:
             logger.error(f"Error handling help command: {e}")
-            self._send_error_message(update, "帮助信息获取失败，请稍后重试。")
+            self._send_error_message(update, "Failed to get help information, please try again later.")
     
     def handle_register_command(self, update: Update, context):
         """Handle /register command"""
@@ -251,7 +251,7 @@ class TelegramBot:
                 
         except Exception as e:
             logger.error(f"Error handling register command: {e}")
-            self._send_error_message(update, "注册命令处理失败，请稍后重试。")
+            self._send_error_message(update, "Failed to process register command, please try again later.")
     
     def handle_claim_command(self, update: Update, context):
         """Handle /claim command"""
@@ -280,7 +280,7 @@ class TelegramBot:
                 
         except Exception as e:
             logger.error(f"Error handling claim command: {e}")
-            self._send_error_message(update, "申请命令处理失败，请稍后重试。")
+            self._send_error_message(update, "Failed to process claim command, please try again later.")
     
     def handle_callback_query(self, update: Update, context):
         """Handle inline keyboard callbacks"""
@@ -318,11 +318,11 @@ class TelegramBot:
             
             else:
                 logger.warning(f"Unknown callback data: {callback_data}")
-                self._safe_edit_message(query, "未知的操作，请重新开始。")
+                self._safe_edit_message(query, "Unknown operation, please start again.")
                 
         except Exception as e:
             logger.error(f"Error handling callback query: {e}")
-            self._send_callback_error(update.callback_query, "操作处理失败，请稍后重试。")
+            self._send_callback_error(update.callback_query, "Operation failed, please try again later.")
     
     def handle_text_input(self, update: Update, context):
         """Handle text input from users"""
@@ -348,19 +348,19 @@ class TelegramBot:
             elif current_state == UserStateType.IDLE:
                 # User sent text while idle - provide guidance
                 update.message.reply_text(
-                    "请使用以下命令：\n"
-                    "• /register - 注册用户信息\n"
-                    "• /claim - 提交报销申请\n"
-                    "• /help - 查看帮助信息"
+                    "Please use the following commands:\n"
+                    "• /register - Register user information\n"
+                    "• /claim - Submit expense claim\n"
+                    "• /help - View help information"
                 )
             
             else:
                 logger.warning(f"Unexpected text input in state {current_state}")
-                update.message.reply_text("请按照提示操作或使用 /help 查看帮助。")
+                update.message.reply_text("Please follow the prompts or use /help to view help.")
                 
         except Exception as e:
             logger.error(f"Error handling text input: {e}")
-            self._send_error_message(update, "文本处理失败，请稍后重试。")
+            self._send_error_message(update, "Text processing failed, please try again later.")
     
     def handle_photo_upload(self, update: Update, context):
         """Handle photo uploads"""
@@ -374,7 +374,7 @@ class TelegramBot:
             
             if current_state != UserStateType.CLAIMING_PHOTO:
                 update.message.reply_text(
-                    "请先使用 /claim 命令开始申请流程，然后按提示上传收据照片。"
+                    "Please use /claim command first to start the claim process, then upload receipt photo as prompted."
                 )
                 return
             
@@ -401,7 +401,7 @@ class TelegramBot:
                 
         except Exception as e:
             logger.error(f"Error handling photo upload: {e}")
-            self._send_error_message(update, "照片处理失败，请稍后重试。")
+            self._send_error_message(update, "Photo processing failed, please try again later.")
     
     def handle_error(self, update: Update, context):
         """Handle errors with comprehensive error handling"""
@@ -432,7 +432,7 @@ class TelegramBot:
     def _handle_role_callback(self, query, callback_data, current_state, temp_data):
         """Handle role selection callback"""
         if current_state != UserStateType.REGISTERING_ROLE:
-            self._safe_edit_message(query, "请先使用 /register 命令开始注册。")
+            self._safe_edit_message(query, "Please use /register command first to start registration.")
             return
         
         role = callback_data.replace('role_', '')
@@ -457,7 +457,7 @@ class TelegramBot:
     def _handle_category_callback(self, query, callback_data, current_state, temp_data):
         """Handle category selection callback"""
         if current_state != UserStateType.CLAIMING_CATEGORY:
-            self._safe_edit_message(query, "请先使用 /claim 命令开始申请。")
+            self._safe_edit_message(query, "Please use /claim command first to start the claim.")
             return
         
         result = self.claims_manager.process_claim_step(
@@ -469,7 +469,7 @@ class TelegramBot:
     def _handle_confirmation_callback(self, query, callback_data, current_state, temp_data):
         """Handle confirmation callback"""
         if current_state != UserStateType.CLAIMING_CONFIRM:
-            self._safe_edit_message(query, "没有待确认的申请。")
+            self._safe_edit_message(query, "No pending claim to confirm.")
             return
         
         result = self.claims_manager.process_claim_step(
@@ -523,7 +523,7 @@ class TelegramBot:
             self._safe_edit_message(query, result['message'], result.get('keyboard'))
         
         else:
-            self._safe_edit_message(query, "没有正在进行的操作可以取消。")
+            self._safe_edit_message(query, "No ongoing operation to cancel.")
     
     def _handle_registration_text(self, update, field, text):
         """Handle text input during registration"""
