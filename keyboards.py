@@ -21,12 +21,12 @@ class KeyboardBuilder:
         Create inline keyboard for user role selection during registration.
         
         Returns:
-            InlineKeyboardMarkup: Keyboard with Staff, Manager, Admin options
+            InlineKeyboardMarkup: Keyboard with Staff, Manager, Ambassador options
         """
         keyboard = [
             [InlineKeyboardButton("Staff", callback_data="role_staff")],
             [InlineKeyboardButton("Manager", callback_data="role_manager")],
-            [InlineKeyboardButton("Admin", callback_data="role_admin")]
+            [InlineKeyboardButton("Ambassador", callback_data="role_ambassador")]
         ]
         return InlineKeyboardMarkup(keyboard)
 
