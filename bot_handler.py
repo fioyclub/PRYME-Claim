@@ -74,74 +74,23 @@ class TelegramBot:
     
     def start_webhook(self, webhook_url: str, port: int = 8000):
         """
-        Start webhook for production deployment (v13.15 style)
+        Set webhook for production deployment (v13.15 style)
+        Note: Flask server is now handled separately by Gunicorn
         
         Args:
             webhook_url: URL for webhook
-            port: Port to listen on
+            port: Port to listen on (unused, kept for compatibility)
         """
         try:
-            logger.info(f"Starting webhook on {webhook_url}:{port}")
+            logger.info(f"Setting webhook to {webhook_url}")
             
             # Set webhook
             self.updater.bot.set_webhook(url=webhook_url)
-            logger.info(f"Webhook set to: {webhook_url}")
-            
-            # Start Flask server for health check and webhook handling
-            from flask import Flask, request, jsonify
-            import time
-            
-            app = Flask(__name__)
-            start_time = time.time()
-            health_check_count = 0
-            
-            @app.route('/health')
-            def health_check():
-                """Health check endpoint for monitoring"""
-                nonlocal health_check_count
-                health_check_count += 1
-                
-                uptime_seconds = time.time() - start_time
-                uptime_hours = uptime_seconds / 3600
-                hours, remainder = divmod(int(uptime_seconds), 3600)
-                minutes, seconds = divmod(remainder, 60)
-                uptime_human = f"{hours}h {minutes}m {seconds}s" if hours > 0 else f"{minutes}m {seconds}s"
-                
-                return jsonify({
-                    'status': 'healthy',
-                    'service': 'telegram-claim-bot',
-                    'timestamp': time.time(),
-                    'uptime_seconds': uptime_seconds,
-                    'uptime_hours': round(uptime_hours, 2),
-                    'uptime_human': uptime_human,
-                    'health_checks_total': health_check_count,
-                    'monitoring_interval': '10_minutes',
-                    'version': '1.0.0',
-                    'deployment': 'render_production',
-                    'telegram_bot_version': '13.15'
-                }), 200
-            
-            @app.route('/', methods=['POST'])
-            def webhook():
-                """Handle incoming webhook updates from Telegram"""
-                try:
-                    update_data = request.get_json()
-                    if update_data:
-                        # Create update object and process it (v13.15 style)
-                        update = Update.de_json(update_data, self.updater.bot)
-                        self.dispatcher.process_update(update)
-                    
-                    return '', 200
-                except Exception as e:
-                    logger.error(f"Webhook processing error: {e}")
-                    return '', 500
-            
-            # Run Flask app
-            logger.info(f"Starting Flask server on port {port}")
-            app.run(host='0.0.0.0', port=port, debug=False, threaded=True)
+            logger.info(f"Webhook set successfully to: {webhook_url}")
+            logger.info("Flask server will be handled by Gunicorn")
             
         except Exception as e:
-            logger.error(f"Failed to start webhook: {e}")
+            logger.error(f"Failed to set webhook: {e}")
             raise
     
     def start_polling(self):
