@@ -152,6 +152,21 @@ class KeyboardBuilder:
         return InlineKeyboardMarkup(keyboard)
 
     @staticmethod
+    def dayoff_type_keyboard() -> InlineKeyboardMarkup:
+        """
+        Create inline keyboard for day-off type selection.
+        
+        Returns:
+            InlineKeyboardMarkup: Keyboard with One-day and Multiple-day options
+        """
+        keyboard = [
+            [InlineKeyboardButton("One-day", callback_data="dayoff_type_oneday")],
+            [InlineKeyboardButton("Multiple-day", callback_data="dayoff_type_multiday")],
+            [InlineKeyboardButton("❌ Cancel Operation", callback_data="cancel")]
+        ]
+        return InlineKeyboardMarkup(keyboard)
+
+    @staticmethod
     def custom_keyboard(buttons: List[Tuple[str, str]], columns: int = 1) -> InlineKeyboardMarkup:
         """
         Create custom inline keyboard with specified buttons.
