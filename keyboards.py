@@ -36,15 +36,24 @@ class KeyboardBuilder:
         Create inline keyboard for expense claim category selection.
         
         Returns:
-            InlineKeyboardMarkup: Keyboard with all expense categories and emojis
+            InlineKeyboardMarkup: Keyboard with all expense categories and emojis in 2-column layout
         """
         keyboard = [
-            [InlineKeyboardButton("Food 🍔", callback_data="category_food")],
-            [InlineKeyboardButton("Transportation 🚗", callback_data="category_transportation")],
-            [InlineKeyboardButton("Flight ✈️", callback_data="category_flight")],
-            [InlineKeyboardButton("Event 🎉", callback_data="category_event")],
-            [InlineKeyboardButton("AI 🤖", callback_data="category_ai")],
-            [InlineKeyboardButton("Other 📦", callback_data="category_other")]
+            [
+                InlineKeyboardButton("Food 🍔", callback_data="category_food"),
+                InlineKeyboardButton("Transportation 🚗", callback_data="category_transportation")
+            ],
+            [
+                InlineKeyboardButton("Flight ✈️", callback_data="category_flight"),
+                InlineKeyboardButton("Event 🎉", callback_data="category_event")
+            ],
+            [
+                InlineKeyboardButton("AI 🤖", callback_data="category_ai"),
+                InlineKeyboardButton("Reception 🎪", callback_data="category_reception")
+            ],
+            [
+                InlineKeyboardButton("Other 📦", callback_data="category_other")
+            ]
         ]
         return InlineKeyboardMarkup(keyboard)
 
