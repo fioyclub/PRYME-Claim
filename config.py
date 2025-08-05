@@ -19,6 +19,15 @@ class Config:
         self.GOOGLE_SPREADSHEET_ID = self._get_required_env('GOOGLE_SPREADSHEET_ID')
         self.GOOGLE_DRIVE_FOLDER_ID = self._get_required_env('GOOGLE_DRIVE_FOLDER_ID')
         
+        # Category-specific Google Drive Folder IDs
+        self.AI_FOLDER_ID = self._get_required_env('AI_FOLDER_ID')
+        self.EVENT_FOLDER_ID = self._get_required_env('EVENT_FOLDER_ID')
+        self.FLIGHT_FOLDER_ID = self._get_required_env('FLIGHT_FOLDER_ID')
+        self.FOOD_FOLDER_ID = self._get_required_env('FOOD_FOLDER_ID')
+        self.OTHER_FOLDER_ID = self._get_required_env('OTHER_FOLDER_ID')
+        self.RECEPTION_FOLDER_ID = self._get_required_env('RECEPTION_FOLDER_ID')
+        self.TRANSPORT_FOLDER_ID = self._get_required_env('TRANSPORT_FOLDER_ID')
+        
         # Deployment Configuration
         self.WEBHOOK_URL = os.getenv('WEBHOOK_URL')
         self.PORT = int(os.getenv('PORT', '8000'))
@@ -43,3 +52,22 @@ class Config:
     def get_google_token_dict(self) -> dict:
         """Get Google OAuth token as dictionary"""
         return json.loads(self.GOOGLE_TOKEN_JSON)
+    
+    def get_category_folder_id(self, category: str) -> str:
+        """Get Google Drive folder ID for specific category"""
+        category_folder_mapping = {
+            'Food': self.FOOD_FOLDER_ID,
+            'Transportation': self.TRANSPORT_FOLDER_ID,
+            'Flight': self.FLIGHT_FOLDER_ID,
+            'Event': self.EVENT_FOLDER_ID,
+            'AI': self.AI_FOLDER_ID,
+            'Reception': self.RECEPTION_FOLDER_ID,
+            'Other': self.OTHER_FOLDER_ID
+        }
+        
+        folder_id = category_folder_mapping.get(category)
+        if not folder_id:
+            # Fallback to default folder if category not found
+            return self.GOOGLE_DRIVE_FOLDER_ID
+        
+        return folder_id
