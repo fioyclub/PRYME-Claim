@@ -214,6 +214,7 @@ class TelegramBot:
                 "• ✈️ Flight - Flight expenses\n"
                 "• 🎉 Event - Event costs\n"
                 "• 🤖 AI - AI tool expenses\n"
+                "• 🎪 Reception - Reception expenses\n"
                 "• 📦 Other - Other expenses\n\n"
                 "If you have any questions, please contact the administrator."
             )
