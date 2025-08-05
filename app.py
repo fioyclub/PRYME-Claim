@@ -28,6 +28,8 @@ def create_app():
     @app.route('/health', methods=['GET', 'HEAD'])
     def health():
         """Simple health check endpoint for uptime monitoring"""
+        if bot_instance is None:
+            return "Bot not initialized", 503
         return "OK", 200
     
     @app.route('/health/detailed')
@@ -56,6 +58,11 @@ def create_app():
             'telegram_bot_version': '13.15',
             'wsgi_server': 'gunicorn'
         }), 200
+    
+    @app.route('/', methods=['GET'])
+    def index():
+        """Root endpoint for direct access"""
+        return {"status": "OK", "message": "Pryme Claim Bot is running"}, 200
     
     @app.route('/', methods=['POST'])
     def webhook():
