@@ -377,13 +377,17 @@ class TelegramBot:
             self._send_error_message(update, "Text processing failed, please try again later.")
     
     def handle_photo_upload(self, update: Update, context):
-        """Handle photo uploads with message deletion and processing feedback"""
+        """Handle photo uploads with optimized memory management"""
+        photo_data = None
         try:
             user_id = update.effective_user.id
             chat_id = update.effective_chat.id
             message_id = update.message.message_id
             
             logger.info(f"User {user_id} uploaded photo")
+            
+            # Check memory before processing large files
+            self.state_manager.check_memory_and_cleanup(threshold_mb=350.0)
             
             # Get current user state
             current_state, temp_data = self.state_manager.get_user_state(user_id)
@@ -398,23 +402,33 @@ class TelegramBot:
             processing_message = update.message.reply_text("📸 Processing your receipt...")
             
             try:
-                # Get photo data (v13.15 style)
+                # Get photo data with memory optimization
                 photo = update.message.photo[-1]  # Get highest resolution
                 photo_file = photo.get_file()
-                photo_data = photo_file.download_as_bytearray()
                 
-                # Process photo upload (save to Google Drive)
+                # Download as bytes directly to avoid bytearray -> bytes conversion
+                photo_data = photo_file.download_as_bytearray()
+                logger.debug(f"Downloaded photo: {len(photo_data)} bytes")
+                
+                # Process photo upload immediately and release memory
                 result = self.claims_manager.process_claim_step(
                     user_id, 'photo', bytes(photo_data)
                 )
                 
+                # Immediately clear photo data from memory
+                del photo_data
+                photo_data = None
+                
+                # Force garbage collection after large file processing
+                import gc
+                gc.collect()
+                
                 # Delete the original photo message from user
                 try:
                     context.bot.delete_message(chat_id=chat_id, message_id=message_id)
-                    logger.info(f"Successfully deleted original photo message {message_id} from user {user_id}")
+                    logger.debug(f"Deleted original photo message {message_id} from user {user_id}")
                 except Exception as delete_error:
                     logger.warning(f"Failed to delete photo message {message_id}: {delete_error}")
-                    # Continue processing even if deletion fails
                 
                 # Delete the processing message
                 try:
@@ -424,20 +438,23 @@ class TelegramBot:
                 
                 # Send final result message
                 if result['success']:
-                    # Send success message with confirmation
                     final_message = "✅ Receipt saved successfully!\n\n" + result['message']
                     update.effective_chat.send_message(
                         text=final_message,
                         reply_markup=result['keyboard']
                     )
                 else:
-                    # Send error message
                     update.effective_chat.send_message(
                         text=result['message'],
                         reply_markup=result.get('keyboard')
                     )
                     
             except Exception as processing_error:
+                # Clean up photo data on error
+                if photo_data is not None:
+                    del photo_data
+                    photo_data = None
+                
                 # Delete the processing message if it exists
                 try:
                     context.bot.delete_message(chat_id=chat_id, message_id=processing_message.message_id)
@@ -452,8 +469,19 @@ class TelegramBot:
                 raise processing_error
                 
         except Exception as e:
+            # Ensure photo data is cleaned up on any error
+            if photo_data is not None:
+                del photo_data
+                photo_data = None
+            
             logger.error(f"Error handling photo upload: {e}")
             self._send_error_message(update, "Photo processing failed, please try again later.")
+        finally:
+            # Final cleanup to ensure memory is released
+            if photo_data is not None:
+                del photo_data
+            import gc
+            gc.collect()
     
     def handle_error(self, update: Update, context):
         """Handle errors with comprehensive error handling"""
