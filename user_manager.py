@@ -132,7 +132,7 @@ class UserManager:
                              user_id, error_msg)
                 return {
                     'success': False,
-                    'message': '用户ID无效，请重试',
+                    'message': 'Invalid user ID, please try again',
                     'next_step': None
                 }
             
@@ -141,7 +141,7 @@ class UserManager:
                 logger.info("User %d attempted to register but is already registered", user_id)
                 return {
                     'success': False,
-                    'message': '你已经注册过了，可以直接使用 /claim 提交报销申请',
+                    'message': 'You are already registered, you can directly use /claim to submit expense claims',
                     'next_step': None
                 }
             
@@ -152,13 +152,13 @@ class UserManager:
                 
                 # Return appropriate message based on current state
                 if current_state == UserStateType.REGISTERING_NAME:
-                    message = '请输入你的真实姓名'
+                    message = 'Please enter your real name'
                 elif current_state == UserStateType.REGISTERING_PHONE:
-                    message = '请输入你的电话号码'
+                    message = 'Please enter your phone number'
                 elif current_state == UserStateType.REGISTERING_ROLE:
-                    message = '请选择你的身份'
+                    message = 'Please select your role'
                 else:
-                    message = '请继续完成注册流程'
+                    message = 'Please continue to complete the registration process'
                 
                 return {
                     'success': True,
@@ -173,7 +173,7 @@ class UserManager:
             logger.info("Started registration process for user %d", user_id)
             return {
                 'success': True,
-                'message': '欢迎使用报销申请系统！请输入你的真实姓名',
+                'message': 'Welcome to the Expense Claim System! Please enter your real name',
                 'next_step': UserStateType.REGISTERING_NAME.value,
                 'temp_data': {}
             }
@@ -182,7 +182,7 @@ class UserManager:
             logger.error("Error starting registration for user %d: %s", user_id, e)
             return {
                 'success': False,
-                'message': '注册启动失败，请稍后重试',
+                'message': 'Failed to start registration, please try again later',
                 'next_step': None
             }
     
@@ -206,7 +206,7 @@ class UserManager:
                 logger.warning("User %d not in registration process for step %s", user_id, step)
                 return {
                     'success': False,
-                    'message': '请先使用 /register 命令开始注册',
+                    'message': 'Please use /register command first to start registration',
                     'next_step': None
                 }
             
@@ -224,7 +224,7 @@ class UserManager:
                 logger.warning("Unknown registration step %s for user %d", step, user_id)
                 return {
                     'success': False,
-                    'message': '注册流程出现错误，请重新开始注册',
+                    'message': 'Registration process error, please restart registration',
                     'next_step': None
                 }
                 
@@ -232,7 +232,7 @@ class UserManager:
             logger.error("Error processing registration step %s for user %d: %s", step, user_id, e)
             return {
                 'success': False,
-                'message': '处理注册信息时出现错误，请重试',
+                'message': 'Error processing registration information, please try again',
                 'next_step': None
             }
     
@@ -248,7 +248,7 @@ class UserManager:
                 # Use validation helper for comprehensive error handling
                 error_response = create_validation_error_response(
                     validation_result, 'name', user_id, 
-                    "注册过程中"
+                    "during registration"
                 )
                 
                 return {
@@ -263,7 +263,7 @@ class UserManager:
             # Success - use validation helper for success response
             success_response = create_validation_success_response(
                 'name', validation_result.value, user_id,
-                "请输入你的电话号码："
+                "Please enter your phone number:"
             )
             
             # Store name and move to phone input
@@ -281,7 +281,7 @@ class UserManager:
             self.error_handler.log_error_details(e, "name_input_processing", user_id)
             return {
                 'success': False,
-                'message': '❌ 处理姓名时出现错误，请重试',
+                'message': '❌ Error processing name, please try again',
                 'next_step': UserStateType.REGISTERING_NAME.value
             }
     
@@ -297,7 +297,7 @@ class UserManager:
                 # Use validation helper for comprehensive error handling
                 error_response = create_validation_error_response(
                     validation_result, 'phone', user_id,
-                    "注册过程中"
+                    "during registration"
                 )
                 
                 return {
@@ -312,7 +312,7 @@ class UserManager:
             # Success - use validation helper for success response
             success_response = create_validation_success_response(
                 'phone', validation_result.value, user_id,
-                "请选择你的身份："
+                "Please select your role:"
             )
             
             # Store phone and move to role selection
@@ -331,7 +331,7 @@ class UserManager:
             self.error_handler.log_error_details(e, "phone_input_processing", user_id)
             return {
                 'success': False,
-                'message': '❌ 处理电话号码时出现错误，请重试',
+                'message': '❌ Error processing phone number, please try again',
                 'next_step': UserStateType.REGISTERING_PHONE.value
             }
     
@@ -344,7 +344,7 @@ class UserManager:
             logger.info("Invalid role selection from user %d: %s", user_id, role)
             return {
                 'success': False,
-                'message': '请选择有效的身份选项',
+                'message': 'Please select a valid role option',
                 'next_step': UserStateType.REGISTERING_ROLE.value,
                 'show_role_keyboard': True
             }
@@ -371,7 +371,7 @@ class UserManager:
                            user_id, name, phone, role)
                 return {
                     'success': False,
-                    'message': '注册信息不完整，请重新开始注册',
+                    'message': 'Registration information incomplete, please restart registration',
                     'next_step': None
                 }
             
@@ -409,7 +409,7 @@ class UserManager:
                 logger.error("Failed to save registration data for user %d", user_id)
                 return {
                     'success': False,
-                    'message': '注册保存失败，请重试',
+                    'message': 'Failed to save registration, please try again',
                     'next_step': None
                 }
             
@@ -419,7 +419,7 @@ class UserManager:
             logger.info("Successfully completed registration for user %d (%s)", user_id, name)
             return {
                 'success': True,
-                'message': f'注册成功！欢迎 {name}，你现在可以使用 /claim 命令提交报销申请了。',
+                'message': f'Registration successful! Welcome {name}, you can now use /claim command to submit expense claims.',
                 'next_step': None,
                 'user_data': registration.to_dict()
             }
@@ -428,7 +428,7 @@ class UserManager:
             logger.error("Error completing registration for user %d: %s", user_id, e)
             return {
                 'success': False,
-                'message': '注册完成时出现错误，请重试',
+                'message': 'Error completing registration, please try again',
                 'next_step': None
             }
     
@@ -446,7 +446,7 @@ class UserManager:
             if not self.state_manager.is_user_registering(user_id):
                 return {
                     'success': False,
-                    'message': '没有正在进行的注册流程'
+                    'message': 'No ongoing registration process'
                 }
             
             self.state_manager.clear_user_state(user_id)
@@ -454,14 +454,14 @@ class UserManager:
             logger.info("Cancelled registration for user %d", user_id)
             return {
                 'success': True,
-                'message': '注册已取消'
+                'message': 'Registration cancelled'
             }
             
         except Exception as e:
             logger.error("Error cancelling registration for user %d: %s", user_id, e)
             return {
                 'success': False,
-                'message': '取消注册时出现错误'
+                'message': 'Error cancelling registration'
             }
     
     def get_registration_progress(self, user_id: int) -> Dict[str, Any]:
@@ -516,7 +516,7 @@ class UserManager:
         try:
             # Check if user is registered
             if not self.is_user_registered(user_id):
-                return False, "你需要先注册才能使用此功能。请使用 /register 命令进行注册。"
+                return False, "You need to register first to use this feature. Please use /register command to register."
             
             # If no specific role required, registration is sufficient
             if required_role is None:
@@ -525,7 +525,7 @@ class UserManager:
             # Get user data and check role
             user_data = self.get_user_data(user_id)
             if not user_data:
-                return False, "无法获取用户信息，请重新注册。"
+                return False, "Unable to get user information, please register again."
             
             # Check if user has required role or higher
             role_hierarchy = {
@@ -540,8 +540,8 @@ class UserManager:
             if user_level >= required_level:
                 return True, None
             else:
-                return False, f"此功能需要 {required_role.value} 或更高权限。"
+                return False, f"This feature requires {required_role.value} or higher permissions."
                 
         except Exception as e:
             logger.error("Error checking permission for user %d: %s", user_id, e)
-            return False, "权限检查时出现错误，请稍后重试。"
+            return False, "Error checking permissions, please try again later."
