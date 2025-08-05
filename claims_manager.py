@@ -267,11 +267,6 @@ class ClaimsManager:
                     'success': False
                 }
             
-            # Success - use validation helper for success response
-            success_response = create_validation_success_response(
-                'photo', 'Receipt photo', user_id
-            )
-            
             claim_data['receipt_link'] = receipt_link
             
             # Move to confirmation step
@@ -285,7 +280,7 @@ class ClaimsManager:
             confirmation_message = self._generate_confirmation_message(claim_data)
             
             return {
-                'message': f'{success_response["message"]}\n\n{confirmation_message}',
+                'message': confirmation_message,
                 'keyboard': KeyboardBuilder.confirmation_keyboard(),
                 'success': True
             }
