@@ -138,50 +138,50 @@ class ErrorHandler:
         """
         base_messages = {
             ErrorType.TELEGRAM_API: {
-                ErrorSeverity.LOW: "消息发送出现小问题，请稍后重试。",
-                ErrorSeverity.MEDIUM: "Telegram 服务暂时不可用，请稍后重试。",
-                ErrorSeverity.HIGH: "Telegram 连接出现严重问题，请稍后重试。"
+                ErrorSeverity.LOW: "Minor issue with message sending, please try again later.",
+                ErrorSeverity.MEDIUM: "Telegram service temporarily unavailable, please try again later.",
+                ErrorSeverity.HIGH: "Serious problem with Telegram connection, please try again later."
             },
             ErrorType.GOOGLE_API: {
-                ErrorSeverity.LOW: "数据保存时出现小问题，请重试。",
-                ErrorSeverity.MEDIUM: "Google 服务暂时不可用，请稍后重试。",
-                ErrorSeverity.HIGH: "Google 服务出现问题，请稍后重试。"
+                ErrorSeverity.LOW: "Minor issue saving data, please try again.",
+                ErrorSeverity.MEDIUM: "Google service temporarily unavailable, please try again later.",
+                ErrorSeverity.HIGH: "Problem with Google service, please try again later."
             },
             ErrorType.NETWORK: {
-                ErrorSeverity.LOW: "网络连接不稳定，请重试。",
-                ErrorSeverity.MEDIUM: "网络连接出现问题，请检查网络后重试。",
-                ErrorSeverity.HIGH: "网络连接严重异常，请稍后重试。"
+                ErrorSeverity.LOW: "Network connection unstable, please try again.",
+                ErrorSeverity.MEDIUM: "Network connection problem, please check network and try again.",
+                ErrorSeverity.HIGH: "Serious network connection issue, please try again later."
             },
             ErrorType.RATE_LIMIT: {
-                ErrorSeverity.MEDIUM: "请求过于频繁，请稍等片刻后重试。",
-                ErrorSeverity.HIGH: "系统繁忙，请等待几分钟后重试。"
+                ErrorSeverity.MEDIUM: "Too many requests, please wait a moment and try again.",
+                ErrorSeverity.HIGH: "System busy, please wait a few minutes and try again."
             },
             ErrorType.AUTHENTICATION: {
-                ErrorSeverity.HIGH: "系统认证出现问题，请联系管理员。",
-                ErrorSeverity.CRITICAL: "系统认证失败，请联系管理员。"
+                ErrorSeverity.HIGH: "System authentication problem, please contact administrator.",
+                ErrorSeverity.CRITICAL: "System authentication failed, please contact administrator."
             },
             ErrorType.VALIDATION: {
-                ErrorSeverity.LOW: "输入信息格式不正确，请检查后重试。"
+                ErrorSeverity.LOW: "Input information format incorrect, please check and try again."
             },
             ErrorType.UNKNOWN: {
-                ErrorSeverity.LOW: "出现未知错误，请重试。",
-                ErrorSeverity.MEDIUM: "系统出现问题，请稍后重试。",
-                ErrorSeverity.HIGH: "系统出现严重问题，请联系管理员。"
+                ErrorSeverity.LOW: "Unknown error occurred, please try again.",
+                ErrorSeverity.MEDIUM: "System problem occurred, please try again later.",
+                ErrorSeverity.HIGH: "Serious system problem, please contact administrator."
             }
         }
         
         # Get base message
         type_messages = base_messages.get(error_type, base_messages[ErrorType.UNKNOWN])
-        message = type_messages.get(error_severity, type_messages.get(ErrorSeverity.MEDIUM, "系统出现问题，请稍后重试。"))
+        message = type_messages.get(error_severity, type_messages.get(ErrorSeverity.MEDIUM, "System problem occurred, please try again later."))
         
         # Add context-specific information
         if context:
             context_messages = {
-                "registration": "注册过程中",
-                "claim_submission": "提交申请时",
-                "photo_upload": "上传照片时",
-                "data_save": "保存数据时",
-                "user_lookup": "查找用户信息时"
+                "registration": "during registration",
+                "claim_submission": "when submitting claim",
+                "photo_upload": "when uploading photo",
+                "data_save": "when saving data",
+                "user_lookup": "when looking up user information"
             }
             
             if context in context_messages:
@@ -253,7 +253,7 @@ class ErrorHandler:
             
             return False, None, user_message
         
-        return False, None, "❌ 操作失败，请稍后重试。"
+        return False, None, "❌ Operation failed, please try again later."
     
     def _should_retry(self, error_type: ErrorType, attempt: int) -> bool:
         """Determine if error should be retried"""
@@ -390,7 +390,7 @@ def with_error_handling(context: str = "", reset_state_on_success: bool = True):
                 return result
             else:
                 # Create a custom exception with user-friendly message
-                raise RuntimeError(error_message or "操作失败")
+                raise RuntimeError(error_message or "Operation failed")
         
         return wrapper
     return decorator
