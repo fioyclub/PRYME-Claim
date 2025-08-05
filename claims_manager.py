@@ -415,7 +415,7 @@ class ClaimsManager:
         Args:
             user_id: Telegram user ID
             photo_data: Photo data as bytes
-            category: Expense category
+            category: Expense category (may include "Other : description" format)
             
         Returns:
             str: Shareable link to the uploaded photo
@@ -423,13 +423,23 @@ class ClaimsManager:
         try:
             timestamp = datetime.now()
             
-            # Generate filename with timestamp and category for better organization
-            filename = f"receipt_{user_id}_{category}_{timestamp.strftime('%Y%m%d_%H%M%S')}.jpg"
+            # Extract base category for folder lookup
+            # If category is "Other : description", extract "Other"
+            if category.startswith('Other : '):
+                base_category = 'Other'
+                logger.info(f"Detected Other category with description: {category}, using base category: {base_category}")
+            else:
+                base_category = category
             
-            # Get category-specific folder ID from config
-            category_folder_id = self.config.get_category_folder_id(category)
+            # Generate filename with timestamp and full category for better organization
+            # Use safe filename by replacing spaces and colons
+            safe_category = category.replace(' : ', '_').replace(' ', '_')
+            filename = f"receipt_{user_id}_{safe_category}_{timestamp.strftime('%Y%m%d_%H%M%S')}.jpg"
             
-            logger.info(f"Uploading receipt for user {user_id}, category {category} to folder {category_folder_id}")
+            # Get category-specific folder ID from config using base category
+            category_folder_id = self.config.get_category_folder_id(base_category)
+            
+            logger.info(f"Uploading receipt for user {user_id}, category {category} (base: {base_category}) to folder {category_folder_id}")
             
             # Upload to category-specific folder
             file_id = self.drive_client._upload_photo_sync(
