@@ -272,6 +272,23 @@ class StateManager:
         }
         return current_state in claiming_states
     
+    def is_user_requesting_dayoff(self, user_id: int) -> bool:
+        """
+        Check if user is in any day-off request state.
+        
+        Args:
+            user_id: Telegram user ID
+            
+        Returns:
+            True if user is in day-off request process
+        """
+        current_state, _ = self.get_user_state(user_id)
+        dayoff_states = {
+            UserStateType.DAYOFF_DATE,
+            UserStateType.DAYOFF_REASON
+        }
+        return current_state in dayoff_states
+    
     def get_active_users_count(self) -> int:
         """
         Get count of users with active (non-idle) states.
