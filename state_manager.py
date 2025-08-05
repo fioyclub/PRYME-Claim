@@ -6,11 +6,19 @@ temporary data storage, and concurrent access protection during multi-step proce
 """
 
 import asyncio
+import gc
 from datetime import datetime, timedelta
 from typing import Dict, Optional, Tuple, Any
 import logging
 from threading import Lock
 from models import UserState, UserStateType
+
+try:
+    import psutil
+    PSUTIL_AVAILABLE = True
+except ImportError:
+    PSUTIL_AVAILABLE = False
+    logger.warning("psutil not available, memory monitoring disabled")
 
 logger = logging.getLogger(__name__)
 
@@ -23,12 +31,12 @@ class StateManager:
     during registration and claim submission processes.
     """
     
-    def __init__(self, cleanup_interval_minutes: int = 30):
+    def __init__(self, cleanup_interval_minutes: int = 5):
         """
-        Initialize the StateManager.
+        Initialize the StateManager with optimized memory management.
         
         Args:
-            cleanup_interval_minutes: Interval for cleaning up expired states
+            cleanup_interval_minutes: Interval for cleaning up expired states (default: 5 minutes)
         """
         self._states: Dict[int, UserState] = {}
         self._locks: Dict[int, Lock] = {}
@@ -36,7 +44,7 @@ class StateManager:
         self._cleanup_interval = cleanup_interval_minutes
         self._last_cleanup = datetime.now()
         
-        logger.info("StateManager initialized with cleanup interval: %d minutes", 
+        logger.info("StateManager initialized with cleanup interval: %d minutes (optimized for memory)", 
                    cleanup_interval_minutes)
     
     def _get_user_lock(self, user_id: int) -> Lock:
@@ -56,7 +64,7 @@ class StateManager:
     
     def _cleanup_expired_states(self) -> None:
         """
-        Clean up expired user states (older than 1 hour).
+        Clean up expired user states (older than 30 minutes) - optimized for memory.
         """
         now = datetime.now()
         
@@ -65,7 +73,8 @@ class StateManager:
             return
         
         expired_users = []
-        expiry_threshold = now - timedelta(hours=1)
+        # Reduced expiry time from 1 hour to 30 minutes to prevent memory accumulation
+        expiry_threshold = now - timedelta(minutes=30)
         
         with self._global_lock:
             for user_id, state in self._states.items():
@@ -75,12 +84,15 @@ class StateManager:
         # Remove expired states
         for user_id in expired_users:
             self._remove_user_state(user_id)
-            logger.info("Cleaned up expired state for user %d", user_id)
+            logger.debug("Cleaned up expired state for user %d", user_id)
         
         self._last_cleanup = now
         
         if expired_users:
-            logger.info("Cleaned up %d expired user states", len(expired_users))
+            logger.info("Memory optimization: Cleaned up %d expired user states", len(expired_users))
+            # Force garbage collection after cleanup to free memory immediately
+            import gc
+            gc.collect()
     
     def _remove_user_state(self, user_id: int) -> None:
         """
@@ -341,3 +353,89 @@ class StateManager:
         
         logger.info("Force cleanup removed %d expired states", len(expired_users))
         return len(expired_users)
+    
+    def get_memory_usage(self) -> Dict[str, Any]:
+        """
+        Get current memory usage information.
+        
+        Returns:
+            Dict containing memory usage stats
+        """
+        if not PSUTIL_AVAILABLE:
+            return {'available': False, 'message': 'psutil not installed'}
+        
+        try:
+            process = psutil.Process()
+            memory_info = process.memory_info()
+            
+            return {
+                'available': True,
+                'rss_mb': round(memory_info.rss / 1024 / 1024, 2),
+                'vms_mb': round(memory_info.vms / 1024 / 1024, 2),
+                'percent': process.memory_percent(),
+                'states_count': len(self._states),
+                'locks_count': len(self._locks)
+            }
+        except Exception as e:
+            logger.error(f"Error getting memory usage: {e}")
+            return {'available': False, 'error': str(e)}
+    
+    def check_memory_and_cleanup(self, threshold_mb: float = 400.0) -> bool:
+        """
+        Check memory usage and perform aggressive cleanup if threshold exceeded.
+        
+        Args:
+            threshold_mb: Memory threshold in MB to trigger cleanup
+            
+        Returns:
+            bool: True if cleanup was performed
+        """
+        if not PSUTIL_AVAILABLE:
+            return False
+        
+        try:
+            memory_info = self.get_memory_usage()
+            if not memory_info.get('available'):
+                return False
+            
+            current_memory = memory_info['rss_mb']
+            
+            if current_memory >= threshold_mb:
+                logger.warning(f"Memory usage {current_memory}MB exceeds threshold {threshold_mb}MB, performing aggressive cleanup")
+                
+                # Force cleanup all expired states
+                cleanup_count = self.force_cleanup()
+                
+                # Additional aggressive cleanup: remove idle states older than 10 minutes
+                now = datetime.now()
+                aggressive_threshold = now - timedelta(minutes=10)
+                aggressive_cleanup = []
+                
+                with self._global_lock:
+                    for user_id, state in self._states.items():
+                        if (state.current_state == UserStateType.IDLE and 
+                            state.last_updated < aggressive_threshold):
+                            aggressive_cleanup.append(user_id)
+                
+                for user_id in aggressive_cleanup:
+                    self._remove_user_state(user_id)
+                
+                total_cleaned = cleanup_count + len(aggressive_cleanup)
+                
+                # Force garbage collection
+                gc.collect()
+                
+                # Check memory after cleanup
+                new_memory_info = self.get_memory_usage()
+                new_memory = new_memory_info.get('rss_mb', current_memory)
+                
+                logger.info(f"Aggressive cleanup completed: removed {total_cleaned} states, "
+                           f"memory: {current_memory}MB -> {new_memory}MB")
+                
+                return True
+            
+            return False
+            
+        except Exception as e:
+            logger.error(f"Error in memory check and cleanup: {e}")
+            return False
