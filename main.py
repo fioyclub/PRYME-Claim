@@ -48,7 +48,7 @@ def initialize_google_clients(config: Config):
         logger.error(f"Failed to initialize Google API clients: {e}")
         raise
 
-def initialize_managers(sheets_client, drive_client):
+def initialize_managers(sheets_client, drive_client, config):
     """Initialize application managers"""
     try:
         logger.info("Initializing application managers...")
@@ -60,7 +60,7 @@ def initialize_managers(sheets_client, drive_client):
         user_manager = UserManager(sheets_client, state_manager)
         
         # Initialize claims manager
-        claims_manager = ClaimsManager(sheets_client, drive_client, state_manager)
+        claims_manager = ClaimsManager(sheets_client, drive_client, state_manager, config)
         
         logger.info("Application managers initialized successfully")
         return state_manager, user_manager, claims_manager
@@ -77,7 +77,7 @@ def start_bot_application(config: Config):
         
         # Initialize managers (synchronous for v13.15)
         state_manager, user_manager, claims_manager = initialize_managers(
-            sheets_client, drive_client
+            sheets_client, drive_client, config
         )
         
         # Initialize bot handler
