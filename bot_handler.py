@@ -363,9 +363,11 @@ class TelegramBot:
             self._send_error_message(update, "Text processing failed, please try again later.")
     
     def handle_photo_upload(self, update: Update, context):
-        """Handle photo uploads"""
+        """Handle photo uploads with message deletion and processing feedback"""
         try:
             user_id = update.effective_user.id
+            chat_id = update.effective_chat.id
+            message_id = update.message.message_id
             
             logger.info(f"User {user_id} uploaded photo")
             
@@ -378,26 +380,62 @@ class TelegramBot:
                 )
                 return
             
-            # Get photo data (v13.15 style)
-            photo = update.message.photo[-1]  # Get highest resolution
-            photo_file = photo.get_file()
-            photo_data = photo_file.download_as_bytearray()
+            # Send processing message first
+            processing_message = update.message.reply_text("📸 Processing your receipt...")
             
-            # Process photo upload
-            result = self.claims_manager.process_claim_step(
-                user_id, 'photo', bytes(photo_data)
-            )
-            
-            if result['success']:
-                update.message.reply_text(
-                    result['message'],
-                    reply_markup=result['keyboard']
+            try:
+                # Get photo data (v13.15 style)
+                photo = update.message.photo[-1]  # Get highest resolution
+                photo_file = photo.get_file()
+                photo_data = photo_file.download_as_bytearray()
+                
+                # Process photo upload (save to Google Drive)
+                result = self.claims_manager.process_claim_step(
+                    user_id, 'photo', bytes(photo_data)
                 )
-            else:
-                update.message.reply_text(
-                    result['message'],
-                    reply_markup=result.get('keyboard')
+                
+                # Delete the original photo message from user
+                try:
+                    context.bot.delete_message(chat_id=chat_id, message_id=message_id)
+                    logger.info(f"Successfully deleted original photo message {message_id} from user {user_id}")
+                except Exception as delete_error:
+                    logger.warning(f"Failed to delete photo message {message_id}: {delete_error}")
+                    # Continue processing even if deletion fails
+                
+                # Delete the processing message
+                try:
+                    context.bot.delete_message(chat_id=chat_id, message_id=processing_message.message_id)
+                except Exception as delete_error:
+                    logger.warning(f"Failed to delete processing message: {delete_error}")
+                
+                # Send final result message
+                if result['success']:
+                    # Send success message with confirmation
+                    final_message = "✅ Receipt saved successfully!\n\n" + result['message']
+                    update.effective_chat.send_message(
+                        text=final_message,
+                        reply_markup=result['keyboard']
+                    )
+                else:
+                    # Send error message
+                    update.effective_chat.send_message(
+                        text=result['message'],
+                        reply_markup=result.get('keyboard')
+                    )
+                    
+            except Exception as processing_error:
+                # Delete the processing message if it exists
+                try:
+                    context.bot.delete_message(chat_id=chat_id, message_id=processing_message.message_id)
+                except:
+                    pass
+                
+                # Send error message
+                update.effective_chat.send_message(
+                    text="❌ Failed to process receipt. Please try again.",
+                    reply_markup=KeyboardBuilder.cancel_keyboard()
                 )
+                raise processing_error
                 
         except Exception as e:
             logger.error(f"Error handling photo upload: {e}")
