@@ -13,6 +13,9 @@ flask==3.0.0
 # Production WSGI server
 gunicorn==21.2.0
 
+# Memory monitoring
+psutil==5.9.6
+
 # Data handling and utilities
 python-dateutil==2.8.2
 pytz==2023.3
