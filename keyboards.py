@@ -58,8 +58,8 @@ class KeyboardBuilder:
         """
         keyboard = [
             [
-                InlineKeyboardButton("✅ 确认", callback_data="confirm_yes"),
-                InlineKeyboardButton("❌ 取消", callback_data="confirm_no")
+                InlineKeyboardButton("✅ Confirm", callback_data="confirm_yes"),
+                InlineKeyboardButton("❌ Cancel", callback_data="confirm_no")
             ]
         ]
         return InlineKeyboardMarkup(keyboard)
@@ -73,7 +73,7 @@ class KeyboardBuilder:
             InlineKeyboardMarkup: Keyboard with option to start making claims
         """
         keyboard = [
-            [InlineKeyboardButton("开始申请报销 💰", callback_data="start_claim")]
+            [InlineKeyboardButton("Start Claim Process 💰", callback_data="start_claim")]
         ]
         return InlineKeyboardMarkup(keyboard)
 
@@ -83,11 +83,10 @@ class KeyboardBuilder:
         Create inline keyboard shown after successful claim submission.
         
         Returns:
-            InlineKeyboardMarkup: Keyboard with options for new claim or view status
+            InlineKeyboardMarkup: Keyboard with option for new claim
         """
         keyboard = [
-            [InlineKeyboardButton("提交新申请 📝", callback_data="new_claim")],
-            [InlineKeyboardButton("查看申请状态 📊", callback_data="view_claims")]
+            [InlineKeyboardButton("Submit New Claim 📝", callback_data="new_claim")]
         ]
         return InlineKeyboardMarkup(keyboard)
 
@@ -100,7 +99,7 @@ class KeyboardBuilder:
             InlineKeyboardMarkup: Keyboard with back button
         """
         keyboard = [
-            [InlineKeyboardButton("⬅️ 返回", callback_data="back")]
+            [InlineKeyboardButton("⬅️ Back", callback_data="back")]
         ]
         return InlineKeyboardMarkup(keyboard)
 
@@ -113,7 +112,7 @@ class KeyboardBuilder:
             InlineKeyboardMarkup: Keyboard with cancel button
         """
         keyboard = [
-            [InlineKeyboardButton("❌ 取消操作", callback_data="cancel")]
+            [InlineKeyboardButton("❌ Cancel Operation", callback_data="cancel")]
         ]
         return InlineKeyboardMarkup(keyboard)
 
