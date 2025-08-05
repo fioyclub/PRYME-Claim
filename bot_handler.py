@@ -185,10 +185,10 @@ class TelegramBot:
                 f"Hey there, <b>{display_name}</b>! 👋 Great to see you here!\n\n"
                 f"I'm your <b>PRYMEPLUS Claim Assistant</b>, ready to make your claim process easier! 💼✨\n\n"
                 f"<b>📋 Available Commands:</b>\n"
-                f"• <code>/register</code> - Register your information 📝\n"
-                f"• <code>/claim</code> - Submit your expense claim 💰\n"
-                f"• <code>/help</code> - View help information ℹ️\n"
-                f"• <code>/dayoff</code> - Request Day-off 🗓️\n\n"
+                f"• /register - Register your information 📝\n"
+                f"• /claim - Submit your expense claim 💰\n"
+                f"• /help - View help information ℹ️\n"
+                f"• /dayoff - Request Day-off 🗓️\n\n"
                 f"<b>🚀 Let's get started!</b>"
             )
             
