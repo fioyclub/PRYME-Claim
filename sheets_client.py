@@ -189,6 +189,39 @@ class SheetsClient:
             logger.error(f"Failed to append claim data: {e}")
             raise
     
+    async def append_dayoff_data(self, dayoff_data: Dict[str, Any]) -> bool:
+        """
+        Append day-off request data to Request Day-off worksheet
+        
+        Args:
+            dayoff_data: Dictionary containing day-off request data
+            
+        Returns:
+            bool: True if data was successfully appended
+        """
+        try:
+            worksheet = "Request Day-off"
+            await self.create_worksheet_if_not_exists(worksheet)
+            
+            # Prepare data row
+            values = [
+                dayoff_data.get('request_date', datetime.now().isoformat()),
+                dayoff_data.get('dayoff_date', ''),
+                dayoff_data.get('reason', ''),
+                dayoff_data.get('submitted_by_name', ''),
+                dayoff_data.get('status', 'Pending')
+            ]
+            
+            # Run in thread pool
+            loop = asyncio.get_event_loop()
+            return await loop.run_in_executor(
+                None, self._append_data_sync, worksheet, [values], 'A:E'
+            )
+            
+        except Exception as e:
+            logger.error(f"Failed to append day-off data: {e}")
+            raise
+    
     def _append_data_sync(self, worksheet: str, values: List[List], range_name: str) -> bool:
         """Synchronous data append operation"""
         service = self._get_service()
@@ -283,6 +316,9 @@ class SheetsClient:
                 if worksheet in ["Claims", "Staff Claims", "Manager Claims", "Ambassador Claims"]:
                     # Claims worksheets (role-specific claims sheets)
                     headers = [['Date', 'Category', 'Amount', 'Receipt Link', 'Submitted By', 'Status']]
+                elif worksheet == "Request Day-off":
+                    # Day-off request worksheet
+                    headers = [['Date of Request', 'Requested Day-off Date', 'Reason', 'Submitted By', 'Status']]
                 elif worksheet in ["Staff", "Manager", "Ambassador"]:
                     # Registration worksheets (user information only)
                     headers = [['Telegram User ID', 'Name', 'Phone', 'Role', 'Register Date']]
@@ -423,39 +459,3 @@ class SheetsClient:
         """Synchronous claims retrieval"""
         service = self._get_service()
         
-        try:
-            result = service.spreadsheets().values().get(
-                spreadsheetId=self.spreadsheet_id,
-                range="Claims!A:F"
-            ).execute()
-            
-            values = result.get('values', [])
-            claims = []
-            
-            # Skip header row if it exists
-            if values and len(values) > 1:
-                rows_to_process = values[1:limit+1] if limit else values[1:]
-                
-                for row in rows_to_process:
-                    if len(row) >= 6:
-                        claims.append({
-                            'date': row[0],
-                            'category': row[1],
-                            'amount': float(row[2]) if row[2] else 0.0,
-                            'receipt_link': row[3],
-                            'submitted_by': int(row[4]) if row[4] else None,
-                            'status': row[5]
-                        })
-            
-            return claims
-            
-        except HttpError as e:
-            if e.resp.status == 400:
-                # Claims worksheet doesn't exist yet
-                return []
-            else:
-                logger.error(f"HTTP error getting claims: {e}")
-                raise
-        except Exception as e:
-            logger.error(f"Unexpected error getting claims: {e}")
-            raise
