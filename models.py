@@ -16,7 +16,7 @@ class UserRole(Enum):
     """User roles in the system."""
     STAFF = "Staff"
     MANAGER = "Manager"
-    ADMIN = "Admin"
+    AMBASSADOR = "Ambassador"
 
 
 class ClaimCategory(Enum):
