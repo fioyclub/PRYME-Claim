@@ -106,7 +106,7 @@ class ClaimsManager:
         
         Args:
             user_id: Telegram user ID
-            step: Current step ('category', 'amount', 'photo', 'confirm')
+            step: Current step ('category', 'amount', 'other_description', 'photo', 'confirm')
             data: Step-specific data (callback_data, text, photo_data)
             
         Returns:
@@ -119,6 +119,8 @@ class ClaimsManager:
                 return self._process_category_selection(user_id, data, temp_data)
             elif step == 'amount':
                 return self._process_amount_input(user_id, data, temp_data)
+            elif step == 'other_description':
+                return self._process_other_description_input(user_id, data, temp_data)
             elif step == 'photo':
                 return self._process_photo_upload(user_id, data, temp_data)
             elif step == 'confirm':
@@ -205,26 +207,90 @@ class ClaimsManager:
                 "Please upload receipt photo:"
             )
             
-            # Update claim data and move to photo upload
+            # Update claim data
             claim_data = temp_data.get('claim_data', {})
             claim_data['amount'] = validation_result.value
             
+            # Check if category is "Other" - if so, ask for description
+            if claim_data.get('category') == 'Other':
+                self.state_manager.set_user_state(
+                    user_id,
+                    UserStateType.CLAIMING_OTHER_DESCRIPTION,
+                    {'step': 'other_description', 'claim_data': claim_data}
+                )
+                
+                return {
+                    'message': '📝 Please enter what you are claiming for:\n\nExample: <i>Parking fee</i>, <i>Stationery purchase</i>, <i>Lunch with client</i>',
+                    'keyboard': KeyboardBuilder.cancel_keyboard(),
+                    'success': True
+                }
+            else:
+                # For other categories, move directly to photo upload
+                self.state_manager.set_user_state(
+                    user_id,
+                    UserStateType.CLAIMING_PHOTO,
+                    {'step': 'photo', 'claim_data': claim_data}
+                )
+                
+                return {
+                    'message': success_response['message'],
+                    'keyboard': KeyboardBuilder.cancel_keyboard(),
+                    'success': True
+                }
+            
+        except Exception as e:
+            self.error_handler.log_error_details(e, "amount_input_processing", user_id)
+            return {
+                'message': '❌ Error processing amount, please try again',
+                'keyboard': KeyboardBuilder.cancel_keyboard(),
+                'success': False
+            }
+    
+    def _process_other_description_input(self, user_id: int, description_text: str, 
+                                           temp_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Process Other category description input step."""
+        try:
+            # Validate description
+            if not description_text or not description_text.strip():
+                return {
+                    'message': '❌ Please provide a description for your claim.\n\nExample: <i>Parking fee</i>, <i>Stationery purchase</i>, <i>Lunch with client</i>',
+                    'keyboard': KeyboardBuilder.cancel_keyboard(),
+                    'success': False
+                }
+            
+            description = description_text.strip()
+            
+            # Validate minimum length
+            if len(description) < 3:
+                return {
+                    'message': '❌ Description too short. Please provide at least 3 characters.\n\nExample: <i>Parking fee</i>, <i>Stationery purchase</i>, <i>Lunch with client</i>',
+                    'keyboard': KeyboardBuilder.cancel_keyboard(),
+                    'success': False
+                }
+            
+            # Update claim data with combined category and description
+            claim_data = temp_data.get('claim_data', {})
+            claim_data['category'] = f"Other : {description}"
+            claim_data['other_description'] = description
+            
+            # Move to photo upload
             self.state_manager.set_user_state(
                 user_id,
                 UserStateType.CLAIMING_PHOTO,
                 {'step': 'photo', 'claim_data': claim_data}
             )
             
+            logger.info(f"User {user_id} provided Other description: {description}")
             return {
-                'message': success_response['message'],
+                'message': f'✅ Description saved: <i>{description}</i>\n\nPlease upload receipt photo:',
                 'keyboard': KeyboardBuilder.cancel_keyboard(),
                 'success': True
             }
             
         except Exception as e:
-            self.error_handler.log_error_details(e, "amount_input_processing", user_id)
+            logger.error(f"Failed to process Other description for user {user_id}: {e}")
             return {
-                'message': '❌ Error processing amount, please try again',
+                'message': '❌ Error processing description, please try again',
                 'keyboard': KeyboardBuilder.cancel_keyboard(),
                 'success': False
             }
@@ -483,10 +549,21 @@ class ClaimsManager:
             user_name = self._get_user_name(user_id)
             user_role = self._get_user_role(user_id)
             
-            # Create claim object
+            # Handle category - for Other with description, store as is
+            category_value = claim_data['category']
+            if category_value.startswith('Other : '):
+                # For Other category with description, use the full string
+                category_for_storage = category_value
+                category_enum = ClaimCategory.OTHER  # For validation purposes
+            else:
+                # For regular categories, use the enum
+                category_enum = ClaimCategory(category_value)
+                category_for_storage = category_enum.value
+            
+            # Create claim object (using enum for validation)
             claim = Claim(
                 date=datetime.now(),
-                category=ClaimCategory(claim_data['category']),
+                category=category_enum,
                 amount=float(claim_data['amount']),
                 receipt_link=claim_data['receipt_link'],
                 submitted_by=user_id,
@@ -498,7 +575,7 @@ class ClaimsManager:
             
             values = [
                 formatted_date,                    # Date in local format
-                claim.category.value,              # Category
+                category_for_storage,              # Category (with description for Other)
                 claim.amount,                      # Amount
                 claim.receipt_link,                # Receipt Link
                 user_name,                         # Submitted By (user name)
@@ -559,13 +636,17 @@ class ClaimsManager:
             category = claim_data.get('category', 'Unknown')
             amount = claim_data.get('amount', 0)
             
-            # Get category enum for emoji
-            try:
-                category_enum = ClaimCategory(category)
-                emoji = self._get_category_emoji(category_enum)
-                category_display = f"{category} {emoji}"
-            except ValueError:
-                category_display = category
+            # Handle Other category with description
+            if category.startswith('Other : '):
+                category_display = f"{category} 📦"
+            else:
+                # Get category enum for emoji
+                try:
+                    category_enum = ClaimCategory(category)
+                    emoji = self._get_category_emoji(category_enum)
+                    category_display = f"{category} {emoji}"
+                except ValueError:
+                    category_display = category
             
             formatted_amount = format_amount(float(amount))
             
