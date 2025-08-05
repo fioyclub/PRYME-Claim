@@ -283,43 +283,43 @@ class DriveClient:
                 if 'storageQuotaExceeded' in str(e):
                     if 'Service Accounts do not have storage quota' in str(e):
                         error_msg = (
-                            f"Service Account没有存储配额。当前设置：\n"
-                            f"- 目标文件夹: {target_folder_id}\n"
+                            f"Service Account has no storage quota. Current settings:\n"
+                            f"- Target folder: {target_folder_id}\n"
                             f"- Service Account: telegram-bot-service@pryme-468004.iam.gserviceaccount.com\n"
-                            f"请确认文件夹已正确共享给Service Account并设为编辑者权限。"
+                            f"Please confirm the folder is properly shared with the Service Account with editor permissions."
                         )
                     else:
                         error_msg = (
-                            f"存储配额已满。解决方案：\n"
-                            f"1. 请确保文件夹 {target_folder_id} 属于有存储空间的用户账号\n"
-                            f"2. 该文件夹需要与Service Account共享并给予编辑权限\n"
-                            f"3. 检查文件夹所有者的Google Drive存储空间是否充足"
+                            f"Storage quota exceeded. Solutions:\n"
+                            f"1. Ensure folder {target_folder_id} belongs to a user account with storage space\n"
+                            f"2. The folder needs to be shared with Service Account with edit permissions\n"
+                            f"3. Check if the folder owner's Google Drive storage space is sufficient"
                         )
                 elif 'insufficientFilePermissions' in str(e):
                     error_msg = (
-                        f"权限不足。解决方案：\n"
-                        f"1. 请将文件夹 {target_folder_id} 与Service Account邮箱共享\n"
-                        f"2. 确保给予'编辑者'权限\n"
-                        f"3. Service Account邮箱可在Google Cloud Console中找到"
+                        f"Insufficient permissions. Solutions:\n"
+                        f"1. Please share folder {target_folder_id} with Service Account email\n"
+                        f"2. Ensure 'Editor' permissions are granted\n"
+                        f"3. Service Account email can be found in Google Cloud Console"
                     )
                 else:
-                    error_msg = f"访问被拒绝 (HTTP 403)。请检查文件夹 {target_folder_id} 的权限设置。"
+                    error_msg = f"Access denied (HTTP 403). Please check permissions for folder {target_folder_id}."
                 logger.error(error_msg)
                 raise ValueError(error_msg)
             elif e.resp.status == 404:
                 error_msg = (
-                    f"文件夹不存在或无法访问 (HTTP 404)。解决方案：\n"
-                    f"1. 检查GOOGLE_DRIVE_FOLDER_ID是否正确：{target_folder_id}\n"
-                    f"2. 确保该文件夹与Service Account共享\n"
-                    f"3. 文件夹ID可从Google Drive URL中获取"
+                    f"Folder does not exist or is inaccessible (HTTP 404). Solutions:\n"
+                    f"1. Check if GOOGLE_DRIVE_FOLDER_ID is correct: {target_folder_id}\n"
+                    f"2. Ensure the folder is shared with Service Account\n"
+                    f"3. Folder ID can be obtained from Google Drive URL"
                 )
                 logger.error(error_msg)
                 raise ValueError(error_msg)
             else:
-                logger.error(f"Google Drive API错误 (HTTP {e.resp.status}): {e}")
+                logger.error(f"Google Drive API error (HTTP {e.resp.status}): {e}")
                 raise
         except Exception as e:
-            logger.error(f"上传照片时发生意外错误 {filename}: {e}")
+            logger.error(f"Unexpected error uploading photo {filename}: {e}")
             raise
     
     async def get_shareable_link(self, file_id: str) -> str:
