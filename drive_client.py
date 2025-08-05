@@ -219,8 +219,9 @@ class DriveClient:
             raise
     
     def _upload_photo_sync(self, photo_data: bytes, filename: str, folder_id: str) -> str:
-        """Synchronous photo upload to shared folder"""
+        """Synchronous photo upload to shared folder with memory optimization"""
         service = self._get_service()
+        media_stream = None
         
         try:
             # Create file metadata
@@ -229,27 +230,24 @@ class DriveClient:
             }
             
             # Always upload to the specified shared folder (user's personal Drive)
-            # This folder should be owned by a user account with storage quota
-            # and shared with the service account with Editor permissions
             target_folder_id = folder_id or self.root_folder_id
             
             if not target_folder_id:
                 raise ValueError("No target folder specified. Please set GOOGLE_DRIVE_FOLDER_ID environment variable.")
             
-            # Force upload to the shared folder - never upload to service account's root
             file_metadata['parents'] = [target_folder_id]
             
-            logger.info(f"Uploading {filename} to shared folder {target_folder_id} (not service account drive)")
+            logger.debug(f"Uploading {filename} ({len(photo_data)} bytes) to folder {target_folder_id}")
             
-            # Create media upload object
+            # Create media upload object with explicit stream management
+            media_stream = io.BytesIO(photo_data)
             media = MediaIoBaseUpload(
-                io.BytesIO(photo_data),
-                mimetype='image/jpeg',  # Assume JPEG for receipts
-                resumable=True
+                media_stream,
+                mimetype='image/jpeg',
+                resumable=False  # Changed to False to avoid keeping upload buffers
             )
             
-            # Upload file using OAuth user credentials to personal Drive
-            logger.info(f"Uploading {filename} using OAuth user credentials to personal Drive")
+            # Upload file
             file = service.files().create(
                 body=file_metadata,
                 media_body=media,
@@ -257,9 +255,9 @@ class DriveClient:
             ).execute()
             
             file_id = file.get('id')
-            logger.info(f"Uploaded photo {filename} with ID: {file_id} to shared folder: {target_folder_id}")
+            logger.debug(f"Uploaded photo {filename} with ID: {file_id}")
             
-            # Set file permissions to make it viewable by anyone with the link
+            # Set file permissions
             try:
                 permission = {
                     'role': 'reader',
@@ -269,10 +267,9 @@ class DriveClient:
                     fileId=file_id,
                     body=permission
                 ).execute()
-                logger.info(f"Set public read permissions for file {file_id}")
+                logger.debug(f"Set public read permissions for file {file_id}")
             except HttpError as perm_error:
                 logger.warning(f"Could not set public permissions for file {file_id}: {perm_error}")
-                # Continue anyway - the file might still be accessible
             
             return file_id
             
@@ -321,6 +318,18 @@ class DriveClient:
         except Exception as e:
             logger.error(f"Unexpected error uploading photo {filename}: {e}")
             raise
+        finally:
+            # Ensure BytesIO stream is properly closed to free memory
+            if media_stream is not None:
+                try:
+                    media_stream.close()
+                    logger.debug(f"Closed media stream for {filename}")
+                except Exception as close_error:
+                    logger.warning(f"Error closing media stream: {close_error}")
+            
+            # Force garbage collection after large file upload
+            import gc
+            gc.collect()
     
     async def get_shareable_link(self, file_id: str) -> str:
         """
