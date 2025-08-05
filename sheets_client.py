@@ -203,9 +203,13 @@ class SheetsClient:
             worksheet = "Request Day-off"
             await self.create_worksheet_if_not_exists(worksheet)
             
+            # Format request date to Malaysia timezone format (DD/MM/YYYY HH:MMam/pm)
+            request_date_str = dayoff_data.get('request_date', datetime.now().isoformat())
+            formatted_request_date = self._format_malaysia_datetime(request_date_str)
+            
             # Prepare data row
             values = [
-                dayoff_data.get('request_date', datetime.now().isoformat()),
+                formatted_request_date,
                 dayoff_data.get('dayoff_date', ''),
                 dayoff_data.get('reason', ''),
                 dayoff_data.get('submitted_by_name', ''),
@@ -221,6 +225,50 @@ class SheetsClient:
         except Exception as e:
             logger.error(f"Failed to append day-off data: {e}")
             raise
+    
+    def _format_malaysia_datetime(self, datetime_str: str) -> str:
+        """
+        Format datetime string to Malaysia timezone format (DD/MM/YYYY HH:MMam/pm).
+        
+        Args:
+            datetime_str: ISO format datetime string
+            
+        Returns:
+            Formatted datetime string
+        """
+        try:
+            import pytz
+            
+            # Parse the datetime string
+            if '+' in datetime_str or 'Z' in datetime_str:
+                # Already has timezone info
+                dt = datetime.fromisoformat(datetime_str.replace('Z', '+00:00'))
+            else:
+                # Assume it's already in Malaysia timezone
+                dt = datetime.fromisoformat(datetime_str)
+                malaysia_tz = pytz.timezone('Asia/Kuala_Lumpur')
+                if dt.tzinfo is None:
+                    dt = malaysia_tz.localize(dt)
+            
+            # Convert to Malaysia timezone if needed
+            malaysia_tz = pytz.timezone('Asia/Kuala_Lumpur')
+            if dt.tzinfo != malaysia_tz:
+                dt = dt.astimezone(malaysia_tz)
+            
+            # Format as DD/MM/YYYY HH:MMam/pm
+            formatted_date = dt.strftime('%d/%m/%Y')
+            formatted_time = dt.strftime('%I:%M%p').lower()
+            
+            return f"{formatted_date} {formatted_time}"
+            
+        except Exception as e:
+            logger.error(f"Error formatting Malaysia datetime: {e}")
+            # Fallback to simple format
+            try:
+                dt = datetime.fromisoformat(datetime_str.replace('Z', '+00:00'))
+                return dt.strftime('%d/%m/%Y %I:%M%p').lower()
+            except:
+                return datetime_str
     
     def _append_data_sync(self, worksheet: str, values: List[List], range_name: str) -> bool:
         """Synchronous data append operation"""
@@ -459,3 +507,39 @@ class SheetsClient:
         """Synchronous claims retrieval"""
         service = self._get_service()
         
+        try:
+            result = service.spreadsheets().values().get(
+                spreadsheetId=self.spreadsheet_id,
+                range="Claims!A:F"
+            ).execute()
+            
+            values = result.get('values', [])
+            claims = []
+            
+            # Skip header row if it exists
+            if values and len(values) > 1:
+                rows_to_process = values[1:limit+1] if limit else values[1:]
+                
+                for row in rows_to_process:
+                    if len(row) >= 6:
+                        claims.append({
+                            'date': row[0],
+                            'category': row[1],
+                            'amount': float(row[2]) if row[2] else 0.0,
+                            'receipt_link': row[3],
+                            'submitted_by': int(row[4]) if row[4] else None,
+                            'status': row[5]
+                        })
+            
+            return claims
+            
+        except HttpError as e:
+            if e.resp.status == 400:
+                # Claims worksheet doesn't exist yet
+                return []
+            else:
+                logger.error(f"HTTP error getting claims: {e}")
+                raise
+        except Exception as e:
+            logger.error(f"Unexpected error getting claims: {e}")
+            raise
