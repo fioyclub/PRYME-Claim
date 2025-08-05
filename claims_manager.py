@@ -220,7 +220,7 @@ class ClaimsManager:
                 )
                 
                 return {
-                    'message': '📝 Please enter what you are claiming for:\n\nExample: <i>Parking fee</i>, <i>Stationery purchase</i>, <i>Lunch with client</i>',
+                    'message': '📝 Please enter what you are claiming for:\n\nExample: Stationery purchase, Parking fee, etc...',
                     'keyboard': KeyboardBuilder.cancel_keyboard(),
                     'success': True
                 }
@@ -253,7 +253,7 @@ class ClaimsManager:
             # Validate description
             if not description_text or not description_text.strip():
                 return {
-                    'message': '❌ Please provide a description for your claim.\n\nExample: <i>Parking fee</i>, <i>Stationery purchase</i>, <i>Lunch with client</i>',
+                    'message': '❌ Please provide a description for your claim.\n\nExample: Stationery purchase, Parking fee, etc...',
                     'keyboard': KeyboardBuilder.cancel_keyboard(),
                     'success': False
                 }
@@ -263,7 +263,7 @@ class ClaimsManager:
             # Validate minimum length
             if len(description) < 3:
                 return {
-                    'message': '❌ Description too short. Please provide at least 3 characters.\n\nExample: <i>Parking fee</i>, <i>Stationery purchase</i>, <i>Lunch with client</i>',
+                    'message': '❌ Description too short. Please provide at least 3 characters.\n\nExample: Stationery purchase, Parking fee, etc...',
                     'keyboard': KeyboardBuilder.cancel_keyboard(),
                     'success': False
                 }
