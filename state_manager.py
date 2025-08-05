@@ -267,6 +267,7 @@ class StateManager:
         claiming_states = {
             UserStateType.CLAIMING_CATEGORY,
             UserStateType.CLAIMING_AMOUNT,
+            UserStateType.CLAIMING_OTHER_DESCRIPTION,
             UserStateType.CLAIMING_PHOTO,
             UserStateType.CLAIMING_CONFIRM
         }
