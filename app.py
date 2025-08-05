@@ -85,13 +85,41 @@ def create_app():
     
     @app.route('/status')
     def status():
-        """Application status endpoint"""
-        return jsonify({
+        """Application status endpoint with memory monitoring"""
+        status_data = {
             'status': 'running',
             'bot_initialized': bot_instance is not None,
             'uptime_seconds': time.time() - start_time,
             'server': 'gunicorn'
-        }), 200
+        }
+        
+        # Add memory information if bot is initialized
+        if bot_instance is not None:
+            try:
+                memory_info = bot_instance.state_manager.get_memory_usage()
+                status_data['memory'] = memory_info
+                
+                # Check if memory is high and trigger cleanup
+                if memory_info.get('available') and memory_info.get('rss_mb', 0) > 350:
+                    cleanup_performed = bot_instance.state_manager.check_memory_and_cleanup(350.0)
+                    status_data['memory']['cleanup_triggered'] = cleanup_performed
+                    
+            except Exception as e:
+                status_data['memory'] = {'error': str(e)}
+        
+        return jsonify(status_data), 200
+    
+    @app.route('/memory')
+    def memory_stats():
+        """Dedicated memory monitoring endpoint"""
+        if bot_instance is None:
+            return jsonify({'error': 'Bot not initialized'}), 503
+        
+        try:
+            memory_info = bot_instance.state_manager.get_memory_usage()
+            return jsonify(memory_info), 200
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
     
     return app
 
@@ -122,8 +150,8 @@ def initialize_bot():
         sheets_client = SheetsClient(spreadsheet_id=config.GOOGLE_SPREADSHEET_ID)
         drive_client = DriveClient(root_folder_id=config.GOOGLE_DRIVE_FOLDER_ID)
         
-        # Initialize managers
-        state_manager = StateManager()
+        # Initialize managers with optimized settings
+        state_manager = StateManager(cleanup_interval_minutes=5)  # More frequent cleanup
         user_manager = UserManager(sheets_client, state_manager)
         claims_manager = ClaimsManager(sheets_client, drive_client, state_manager, config)
         dayoff_manager = DayOffManager(sheets_client, state_manager, user_manager)
@@ -142,7 +170,7 @@ def initialize_bot():
             bot_instance.updater.bot.set_webhook(url=config.WEBHOOK_URL)
             logger.info(f"Webhook set to: {config.WEBHOOK_URL}")
         
-        logger.info("Bot initialized successfully for Gunicorn")
+        logger.info("Bot initialized successfully for Gunicorn with memory optimizations")
         
     except Exception as e:
         logger.error(f"Failed to initialize bot: {e}")
