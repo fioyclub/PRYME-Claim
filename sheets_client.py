@@ -280,11 +280,14 @@ class SheetsClient:
             
             # Add headers if worksheet is empty
             if not values:
-                if worksheet in ["Claims", "Staff", "Manager", "Ambassador"]:
-                    # Claims worksheets (including role-specific ones)
+                if worksheet in ["Claims", "Staff Claims", "Manager Claims", "Ambassador Claims"]:
+                    # Claims worksheets (role-specific claims sheets)
                     headers = [['Date', 'Category', 'Amount', 'Receipt Link', 'Submitted By', 'Status']]
+                elif worksheet in ["Staff", "Manager", "Ambassador"]:
+                    # Registration worksheets (user information only)
+                    headers = [['Telegram User ID', 'Name', 'Phone', 'Role', 'Register Date']]
                 else:
-                    # Registration worksheets
+                    # Default to registration format for unknown worksheets
                     headers = [['Telegram User ID', 'Name', 'Phone', 'Role', 'Register Date']]
                 
                 service.spreadsheets().values().update(
