@@ -284,7 +284,10 @@ class StateManager:
         """
         current_state, _ = self.get_user_state(user_id)
         dayoff_states = {
+            UserStateType.DAYOFF_TYPE,
             UserStateType.DAYOFF_DATE,
+            UserStateType.DAYOFF_START_DATE,
+            UserStateType.DAYOFF_END_DATE,
             UserStateType.DAYOFF_REASON
         }
         return current_state in dayoff_states
