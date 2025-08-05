@@ -83,7 +83,7 @@ class ClaimsManager:
             logger.info(f"Started claim process for user {user_id}")
             
             return {
-                'message': '请选择报销类别：',
+                'message': 'Please select expense category:',
                 'keyboard': KeyboardBuilder.claim_categories_keyboard(),
                 'success': True
             }
@@ -91,7 +91,7 @@ class ClaimsManager:
         except Exception as e:
             logger.error(f"Failed to start claim process for user {user_id}: {e}")
             return {
-                'message': '启动申请流程时出现错误，请稍后重试。',
+                'message': 'Error starting claim process, please try again later.',
                 'keyboard': None,
                 'success': False
             }
@@ -122,7 +122,7 @@ class ClaimsManager:
             else:
                 logger.warning(f"Unknown claim step '{step}' for user {user_id}")
                 return {
-                    'message': '未知的操作步骤，请重新开始申请。',
+                    'message': 'Unknown operation step, please restart the claim.',
                     'keyboard': KeyboardBuilder.cancel_keyboard(),
                     'success': False
                 }
@@ -130,7 +130,7 @@ class ClaimsManager:
         except Exception as e:
             logger.error(f"Failed to process claim step {step} for user {user_id}: {e}")
             return {
-                'message': '处理申请时出现错误，请稍后重试。',
+                'message': 'Error processing claim, please try again later.',
                 'keyboard': KeyboardBuilder.cancel_keyboard(),
                 'success': False
             }
@@ -142,7 +142,7 @@ class ClaimsManager:
             # Validate category selection
             if callback_data not in self.category_mapping:
                 return {
-                    'message': '无效的类别选择，请重新选择：',
+                    'message': 'Invalid category selection, please select again:',
                     'keyboard': KeyboardBuilder.claim_categories_keyboard(),
                     'success': False
                 }
@@ -162,7 +162,7 @@ class ClaimsManager:
             category_display = f"{category.value} {self._get_category_emoji(category)}"
             
             return {
-                'message': f'已选择类别：{category_display}\n\n请输入金额（RM）：',
+                'message': f'Selected category: {category_display}\n\nPlease enter amount (RM):',
                 'keyboard': KeyboardBuilder.cancel_keyboard(),
                 'success': True
             }
@@ -184,7 +184,7 @@ class ClaimsManager:
                 # Use validation helper for comprehensive error handling
                 error_response = create_validation_error_response(
                     validation_result, 'amount', user_id,
-                    "申请过程中"
+                    "during claim process"
                 )
                 
                 return {
@@ -198,7 +198,7 @@ class ClaimsManager:
             formatted_amount = format_amount(validation_result.value)
             success_response = create_validation_success_response(
                 'amount', formatted_amount, user_id,
-                "请上传收据照片："
+                "Please upload receipt photo:"
             )
             
             # Update claim data and move to photo upload
@@ -220,7 +220,7 @@ class ClaimsManager:
         except Exception as e:
             self.error_handler.log_error_details(e, "amount_input_processing", user_id)
             return {
-                'message': '❌ 处理金额时出现错误，请重试',
+                'message': '❌ Error processing amount, please try again',
                 'keyboard': KeyboardBuilder.cancel_keyboard(),
                 'success': False
             }
@@ -238,7 +238,7 @@ class ClaimsManager:
                 # Use validation helper for comprehensive error handling
                 error_response = create_validation_error_response(
                     validation_result, 'photo', user_id,
-                    "申请过程中"
+                    "during claim process"
                 )
                 
                 return {
@@ -262,14 +262,14 @@ class ClaimsManager:
             
             if not success:
                 return {
-                    'message': error_msg or '❌ 上传收据照片失败，请稍后重试。',
+                    'message': error_msg or '❌ Failed to upload receipt photo, please try again later.',
                     'keyboard': KeyboardBuilder.cancel_keyboard(),
                     'success': False
                 }
             
             # Success - use validation helper for success response
             success_response = create_validation_success_response(
-                'photo', '收据照片', user_id
+                'photo', 'Receipt photo', user_id
             )
             
             claim_data['receipt_link'] = receipt_link
@@ -293,7 +293,7 @@ class ClaimsManager:
         except Exception as e:
             self.error_handler.log_error_details(e, "photo_upload_processing", user_id)
             return {
-                'message': '❌ 处理照片时出现错误，请重试',
+                'message': '❌ Error processing photo, please try again',
                 'keyboard': KeyboardBuilder.cancel_keyboard(),
                 'success': False
             }
@@ -312,13 +312,13 @@ class ClaimsManager:
                     self.state_manager.clear_user_state(user_id)
                     
                     return {
-                        'message': '✅ 申请已成功提交！\n\n您的报销申请状态为：待审核',
+                        'message': '✅ Claim submitted successfully!\n\nYour expense claim status: Pending Review',
                         'keyboard': KeyboardBuilder.claim_complete_keyboard(),
                         'success': True
                     }
                 else:
                     return {
-                        'message': '❌ 提交申请时出现错误，请稍后重试。',
+                        'message': '❌ Error submitting claim, please try again later.',
                         'keyboard': KeyboardBuilder.confirmation_keyboard(),
                         'success': False
                     }
@@ -328,13 +328,13 @@ class ClaimsManager:
                 self.state_manager.clear_user_state(user_id)
                 
                 return {
-                    'message': '❌ 申请已取消。',
+                    'message': '❌ Claim cancelled.',
                     'keyboard': KeyboardBuilder.claim_complete_keyboard(),
                     'success': True
                 }
             else:
                 return {
-                    'message': '请选择确认或取消：',
+                    'message': 'Please select confirm or cancel:',
                     'keyboard': KeyboardBuilder.confirmation_keyboard(),
                     'success': False
                 }
@@ -470,18 +470,18 @@ class ClaimsManager:
             formatted_amount = format_amount(float(amount))
             
             message = (
-                "📋 请确认您的申请信息：\n\n"
-                f"类别：{category_display}\n"
-                f"金额：{formatted_amount}\n"
-                f"收据：已上传 ✅\n\n"
-                "确认提交申请吗？"
+                "📋 Please confirm your claim information:\n\n"
+                f"Category: {category_display}\n"
+                f"Amount: {formatted_amount}\n"
+                f"Receipt: Uploaded ✅\n\n"
+                "Confirm to submit claim?"
             )
             
             return message
             
         except Exception as e:
             logger.error(f"Failed to generate confirmation message: {e}")
-            return "请确认您的申请信息并选择是否提交。"
+            return "Please confirm your claim information and choose whether to submit."
     
     def cancel_claim_process(self, user_id: int) -> Dict[str, Any]:
         """
@@ -500,7 +500,7 @@ class ClaimsManager:
             logger.info(f"Cancelled claim process for user {user_id}")
             
             return {
-                'message': '❌ 申请流程已取消。',
+                'message': '❌ Claim process cancelled.',
                 'keyboard': KeyboardBuilder.claim_complete_keyboard(),
                 'success': True
             }
@@ -508,7 +508,7 @@ class ClaimsManager:
         except Exception as e:
             logger.error(f"Failed to cancel claim process for user {user_id}: {e}")
             return {
-                'message': '取消申请时出现错误。',
+                'message': 'Error cancelling claim.',
                 'keyboard': None,
                 'success': False
             }
@@ -554,9 +554,9 @@ class ClaimsManager:
             str: Formatted status message
         """
         if not claims:
-            return "您还没有提交任何申请。"
+            return "You haven't submitted any claims yet."
         
-        message = f"📊 您的申请状态（最近{len(claims)}条）：\n\n"
+        message = f"📊 Your claim status (latest {len(claims)} items):\n\n"
         
         for i, claim in enumerate(claims, 1):
             try:
@@ -586,6 +586,6 @@ class ClaimsManager:
                 
             except Exception as e:
                 logger.error(f"Error formatting claim {i}: {e}")
-                message += f"{i}. 申请信息格式错误\n"
+                message += f"{i}. Claim information format error\n"
         
         return message
