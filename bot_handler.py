@@ -156,32 +156,36 @@ class TelegramBot:
             raise
     
     def handle_start_command(self, update: Update, context):
-        """Handle /start command"""
+        """Handle /start command with optimized HTML format and dynamic user name"""
         try:
             user_id = update.effective_user.id
-            user_name = update.effective_user.first_name or "User"
+            telegram_name = update.effective_user.first_name or "User"
             
-            logger.info(f"User {user_id} ({user_name}) started bot")
+            logger.info(f"User {user_id} ({telegram_name}) started bot")
             
             # Check if user is registered (v13.15 - synchronous call)
             is_registered = self.user_manager.is_user_registered(user_id)
             
+            # Get user name (registered name if available, otherwise Telegram name)
             if is_registered:
-                message = (
-                    f"Welcome back, {user_name}! 👋\n\n"
-                    "You are already registered and can use the following features:\n"
-                    "• /claim - Submit expense claim\n"
-                    "• /help - View help information"
-                )
-                keyboard = KeyboardBuilder.claim_complete_keyboard()
+                user_data = self.user_manager.get_user_data(user_id)
+                display_name = user_data.name if user_data else telegram_name
+                keyboard = KeyboardBuilder.start_claim_keyboard()
             else:
-                message = (
-                    f"Welcome to the Expense Claim System, {user_name}! 👋\n\n"
-                    "Please register your information first to use the system:\n"
-                    "• /register - Register user information\n"
-                    "• /help - View help information"
-                )
-                keyboard = KeyboardBuilder.registration_complete_keyboard()
+                display_name = telegram_name
+                keyboard = KeyboardBuilder.register_now_keyboard()
+            
+            # Optimized welcome message with HTML format and emojis
+            message = (
+                f"<b>🎉 Welcome to PRYME PLUS Bot!</b>\n\n"
+                f"Hey there, <b>{display_name}</b>! 👋 Great to see you here!\n\n"
+                f"I'm your <b>PRYMEPLUS Claim Assistant</b>, ready to make your claim process easier! 💼✨\n\n"
+                f"<b>📋 Available Commands:</b>\n"
+                f"• <code>/register</code> - Register your information 📝\n"
+                f"• <code>/claim</code> - Submit your expense claim 💰\n"
+                f"• <code>/help</code> - View help information ℹ️\n\n"
+                f"<b>🚀 Let's get started!</b>"
+            )
             
             update.message.reply_text(
                 message,
@@ -245,10 +249,11 @@ class TelegramBot:
                 
                 update.message.reply_text(
                     result['message'],
-                    reply_markup=keyboard
+                    reply_markup=keyboard,
+                    parse_mode=ParseMode.HTML
                 )
             else:
-                update.message.reply_text(result['message'])
+                update.message.reply_text(result['message'], parse_mode=ParseMode.HTML)
                 
         except Exception as e:
             logger.error(f"Error handling register command: {e}")
@@ -313,6 +318,9 @@ class TelegramBot:
             
             elif callback_data == 'new_claim':
                 self._handle_new_claim_callback(query)
+            
+            elif callback_data == 'register_now':
+                self._handle_register_now_callback(query)
             
             elif callback_data == 'cancel':
                 self._handle_cancel_callback(query, current_state)
@@ -549,6 +557,24 @@ class TelegramBot:
         
         self._safe_edit_message(query, result['message'], result['keyboard'])
     
+    def _handle_register_now_callback(self, query):
+        """Handle register now callback"""
+        user_id = query.from_user.id
+        
+        logger.info(f"User {user_id} clicked register now button")
+        
+        # Start registration process
+        result = self.user_manager.start_registration(user_id)
+        
+        if result['success']:
+            keyboard = None
+            if result.get('next_step') == UserStateType.REGISTERING_ROLE.value:
+                keyboard = KeyboardBuilder.role_selection_keyboard()
+            
+            self._safe_edit_message(query, result['message'], keyboard)
+        else:
+            self._safe_edit_message(query, result['message'])
+    
     def _handle_cancel_callback(self, query, current_state):
         """Handle cancel callback"""
         user_id = query.from_user.id
@@ -580,7 +606,8 @@ class TelegramBot:
         
         update.message.reply_text(
             result['message'],
-            reply_markup=keyboard
+            reply_markup=keyboard,
+            parse_mode=ParseMode.HTML
         )
     
     def _handle_claim_text(self, update, field, text):
@@ -616,7 +643,7 @@ class TelegramBot:
     def _safe_edit_message(self, query, message, reply_markup=None):
         """Safely edit message, handling 'Message is not modified' error"""
         try:
-            query.edit_message_text(message, reply_markup=reply_markup)
+            query.edit_message_text(message, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
         except Exception as e:
             if "Message is not modified" in str(e):
                 # Message content is the same, just log and continue
