@@ -121,6 +121,30 @@ def create_app():
         except Exception as e:
             return jsonify({'error': str(e)}), 500
     
+    @app.route('/states')
+    def states_info():
+        """State management monitoring endpoint"""
+        if bot_instance is None:
+            return jsonify({'error': 'Bot not initialized'}), 503
+        
+        try:
+            sync_status = bot_instance.state_manager.get_sync_status()
+            return jsonify(sync_status), 200
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+    
+    @app.route('/states/sync', methods=['POST'])
+    def force_sync_states():
+        """Force sync states with Google Sheets"""
+        if bot_instance is None:
+            return jsonify({'error': 'Bot not initialized'}), 503
+        
+        try:
+            success = bot_instance.state_manager.force_sync_with_sheets()
+            return jsonify({'success': success}), 200
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+    
     return app
 
 def initialize_bot():
@@ -154,8 +178,8 @@ def initialize_bot():
         # Initialize lazy client manager (no Google API clients initialized yet)
         lazy_client_manager = get_lazy_client_manager(config)
         
-        # Initialize managers with lazy loading
-        state_manager = StateManager(cleanup_interval_minutes=5)  # More frequent cleanup
+        # Initialize managers with lazy loading and persistent state storage
+        state_manager = StateManager(lazy_client_manager, cleanup_interval_minutes=5)  # Google Sheets persistence
         user_manager = UserManager(lazy_client_manager, state_manager)
         claims_manager = ClaimsManager(lazy_client_manager, state_manager, config)
         dayoff_manager = DayOffManager(lazy_client_manager, state_manager, user_manager)
