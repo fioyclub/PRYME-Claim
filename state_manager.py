@@ -3,14 +3,16 @@ State management for the Telegram Claim Bot.
 
 This module provides the StateManager class that handles user conversation states,
 temporary data storage, and concurrent access protection during multi-step processes.
+Now with Google Sheets persistent storage to prevent state loss on container restarts.
 """
 
 import asyncio
 import gc
+import json
 from datetime import datetime, timedelta
 from typing import Dict, Optional, Tuple, Any
 import logging
-from threading import Lock
+from threading import Lock, Thread
 from models import UserState, UserStateType
 
 try:
@@ -25,27 +27,276 @@ logger = logging.getLogger(__name__)
 
 class StateManager:
     """
-    Manages user conversation states and temporary data.
+    Manages user conversation states and temporary data with Google Sheets persistence.
     
     This class provides thread-safe operations for tracking user states
-    during registration and claim submission processes.
+    during registration and claim submission processes, with persistent storage
+    to prevent state loss on container restarts.
     """
     
-    def __init__(self, cleanup_interval_minutes: int = 5):
+    def __init__(self, lazy_client_manager=None, cleanup_interval_minutes: int = 5, sync_interval_minutes: int = 5):
         """
-        Initialize the StateManager with optimized memory management.
+        Initialize the StateManager with Google Sheets persistence.
         
         Args:
+            lazy_client_manager: Lazy client manager for Google API clients
             cleanup_interval_minutes: Interval for cleaning up expired states (default: 5 minutes)
+            sync_interval_minutes: Interval for syncing with Google Sheets (default: 5 minutes)
         """
-        self._states: Dict[int, UserState] = {}
+        self.lazy_client_manager = lazy_client_manager
+        self._states: Dict[int, UserState] = {}  # Memory cache for active users
         self._locks: Dict[int, Lock] = {}
         self._global_lock = Lock()
         self._cleanup_interval = cleanup_interval_minutes
+        self._sync_interval = sync_interval_minutes
         self._last_cleanup = datetime.now()
+        self._last_sync = datetime.now()
+        self._sheets_worksheet = "UserStates"
+        self._sync_enabled = lazy_client_manager is not None
         
-        logger.info("StateManager initialized with cleanup interval: %d minutes (optimized for memory)", 
-                   cleanup_interval_minutes)
+        # Initialize background sync if sheets client is available
+        if self._sync_enabled:
+            self._initialize_sheets_storage()
+            self._load_states_from_sheets()
+            self._start_background_sync()
+        
+        logger.info("StateManager initialized with Google Sheets persistence: %s, cleanup interval: %d minutes", 
+                   "enabled" if self._sync_enabled else "disabled", cleanup_interval_minutes)
+    
+    def _initialize_sheets_storage(self):
+        """Initialize Google Sheets storage for user states"""
+        try:
+            if not self._sync_enabled:
+                return
+            
+            sheets_client = self.lazy_client_manager.get_sheets_client()
+            
+            # Create UserStates worksheet if it doesn't exist
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            
+            try:
+                success = loop.run_until_complete(
+                    sheets_client.create_worksheet_if_not_exists(self._sheets_worksheet)
+                )
+                
+                if success:
+                    logger.info(f"Created UserStates worksheet: {self._sheets_worksheet}")
+                else:
+                    logger.info(f"UserStates worksheet already exists: {self._sheets_worksheet}")
+                
+                # Ensure headers are set
+                loop.run_until_complete(
+                    sheets_client.ensure_worksheet_headers(self._sheets_worksheet)
+                )
+                
+            finally:
+                loop.close()
+                
+        except Exception as e:
+            logger.error(f"Failed to initialize sheets storage: {e}")
+            self._sync_enabled = False
+    
+    def _load_states_from_sheets(self):
+        """Load all user states from Google Sheets on startup"""
+        try:
+            if not self._sync_enabled:
+                return
+            
+            sheets_client = self.lazy_client_manager.get_sheets_client()
+            
+            # Get all states from UserStates worksheet
+            result = sheets_client._get_service().spreadsheets().values().get(
+                spreadsheetId=sheets_client.spreadsheet_id,
+                range=f"{self._sheets_worksheet}!A:D"
+            ).execute()
+            
+            values = result.get('values', [])
+            loaded_count = 0
+            
+            # Skip header row
+            for row in values[1:] if len(values) > 1 else []:
+                if len(row) >= 4:
+                    try:
+                        user_id = int(row[0])
+                        state_value = row[1]
+                        temp_data_json = row[2] if row[2] else '{}'
+                        last_updated_str = row[3]
+                        
+                        # Parse data
+                        state = UserStateType(state_value)
+                        temp_data = json.loads(temp_data_json)
+                        last_updated = datetime.fromisoformat(last_updated_str)
+                        
+                        # Only load recent states (within 24 hours)
+                        if (datetime.now() - last_updated).total_seconds() < 24 * 3600:
+                            user_state = UserState(
+                                user_id=user_id,
+                                current_state=state,
+                                temp_data=temp_data,
+                                last_updated=last_updated
+                            )
+                            self._states[user_id] = user_state
+                            loaded_count += 1
+                        
+                    except Exception as e:
+                        logger.warning(f"Failed to parse state row {row}: {e}")
+                        continue
+            
+            logger.info(f"Loaded {loaded_count} user states from Google Sheets")
+            
+        except Exception as e:
+            logger.error(f"Failed to load states from sheets: {e}")
+    
+    def _save_state_to_sheets(self, user_id: int, user_state: UserState):
+        """Save a single user state to Google Sheets"""
+        try:
+            if not self._sync_enabled:
+                return
+            
+            sheets_client = self.lazy_client_manager.get_sheets_client()
+            
+            # Prepare data
+            temp_data_json = json.dumps(user_state.temp_data, ensure_ascii=False)
+            last_updated_str = user_state.last_updated.isoformat()
+            
+            # Check if user already exists in sheet
+            existing_row = self._find_user_row_in_sheets(user_id)
+            
+            if existing_row is not None:
+                # Update existing row
+                range_name = f"{self._sheets_worksheet}!A{existing_row}:D{existing_row}"
+                values = [[user_id, user_state.current_state.value, temp_data_json, last_updated_str]]
+                
+                sheets_client._get_service().spreadsheets().values().update(
+                    spreadsheetId=sheets_client.spreadsheet_id,
+                    range=range_name,
+                    valueInputOption='RAW',
+                    body={'values': values}
+                ).execute()
+                
+            else:
+                # Append new row
+                values = [[user_id, user_state.current_state.value, temp_data_json, last_updated_str]]
+                
+                sheets_client._get_service().spreadsheets().values().append(
+                    spreadsheetId=sheets_client.spreadsheet_id,
+                    range=f"{self._sheets_worksheet}!A:D",
+                    valueInputOption='RAW',
+                    insertDataOption='INSERT_ROWS',
+                    body={'values': values}
+                ).execute()
+            
+            logger.debug(f"Saved state for user {user_id} to Google Sheets")
+            
+        except Exception as e:
+            logger.error(f"Failed to save state to sheets for user {user_id}: {e}")
+    
+    def _find_user_row_in_sheets(self, user_id: int) -> Optional[int]:
+        """Find the row number for a specific user in Google Sheets"""
+        try:
+            if not self._sync_enabled:
+                return None
+            
+            sheets_client = self.lazy_client_manager.get_sheets_client()
+            
+            result = sheets_client._get_service().spreadsheets().values().get(
+                spreadsheetId=sheets_client.spreadsheet_id,
+                range=f"{self._sheets_worksheet}!A:A"
+            ).execute()
+            
+            values = result.get('values', [])
+            
+            for i, row in enumerate(values):
+                if len(row) > 0 and str(row[0]) == str(user_id):
+                    return i + 1  # Sheets rows are 1-indexed
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"Failed to find user row for {user_id}: {e}")
+            return None
+    
+    def _delete_state_from_sheets(self, user_id: int):
+        """Delete a user state from Google Sheets"""
+        try:
+            if not self._sync_enabled:
+                return
+            
+            row_number = self._find_user_row_in_sheets(user_id)
+            if row_number is None:
+                return
+            
+            sheets_client = self.lazy_client_manager.get_sheets_client()
+            
+            # Delete the row
+            request_body = {
+                'requests': [{
+                    'deleteDimension': {
+                        'range': {
+                            'sheetId': 0,  # Assuming first sheet
+                            'dimension': 'ROWS',
+                            'startIndex': row_number - 1,  # 0-indexed for API
+                            'endIndex': row_number
+                        }
+                    }
+                }]
+            }
+            
+            sheets_client._get_service().spreadsheets().batchUpdate(
+                spreadsheetId=sheets_client.spreadsheet_id,
+                body=request_body
+            ).execute()
+            
+            logger.debug(f"Deleted state for user {user_id} from Google Sheets")
+            
+        except Exception as e:
+            logger.error(f"Failed to delete state from sheets for user {user_id}: {e}")
+    
+    def _start_background_sync(self):
+        """Start background thread for periodic sync with Google Sheets"""
+        if not self._sync_enabled:
+            return
+        
+        def sync_worker():
+            while True:
+                try:
+                    # Sleep for sync interval
+                    import time
+                    time.sleep(self._sync_interval * 60)
+                    
+                    # Perform sync
+                    self._sync_with_sheets()
+                    
+                except Exception as e:
+                    logger.error(f"Error in background sync: {e}")
+        
+        sync_thread = Thread(target=sync_worker, daemon=True)
+        sync_thread.start()
+        logger.info("Started background sync thread")
+    
+    def _sync_with_sheets(self):
+        """Sync memory states with Google Sheets"""
+        try:
+            if not self._sync_enabled:
+                return
+            
+            now = datetime.now()
+            
+            # Only sync if enough time has passed
+            if (now - self._last_sync).total_seconds() < self._sync_interval * 60:
+                return
+            
+            with self._global_lock:
+                # Save all active states to sheets
+                for user_id, user_state in self._states.items():
+                    self._save_state_to_sheets(user_id, user_state)
+                
+                self._last_sync = now
+                logger.debug(f"Synced {len(self._states)} states with Google Sheets")
+            
+        except Exception as e:
+            logger.error(f"Failed to sync with sheets: {e}")
     
     def _get_user_lock(self, user_id: int) -> Lock:
         """
@@ -107,7 +358,7 @@ class StateManager:
     
     def set_user_state(self, user_id: int, state: UserStateType, data: Optional[Dict[str, Any]] = None) -> None:
         """
-        Set user conversation state with optional temporary data.
+        Set user conversation state with optional temporary data and persist to Google Sheets.
         
         Args:
             user_id: Telegram user ID
@@ -136,6 +387,13 @@ class StateManager:
                     last_updated=now
                 )
                 self._states[user_id] = user_state
+            
+            # Save to Google Sheets asynchronously to avoid blocking
+            if self._sync_enabled:
+                try:
+                    self._save_state_to_sheets(user_id, user_state)
+                except Exception as e:
+                    logger.error(f"Failed to save state to sheets for user {user_id}: {e}")
         
         logger.debug("Set state for user %d: %s", user_id, state.value)
         
@@ -144,7 +402,7 @@ class StateManager:
     
     def get_user_state(self, user_id: int) -> Tuple[UserStateType, Dict[str, Any]]:
         """
-        Get user conversation state and temporary data.
+        Get user conversation state and temporary data, loading from Google Sheets if not in memory.
         
         Args:
             user_id: Telegram user ID
@@ -156,15 +414,72 @@ class StateManager:
         
         with user_lock:
             if user_id not in self._states:
-                # Return default idle state
-                return UserStateType.IDLE, {}
+                # Try to load from Google Sheets
+                if self._sync_enabled:
+                    try:
+                        self._load_user_state_from_sheets(user_id)
+                    except Exception as e:
+                        logger.error(f"Failed to load state from sheets for user {user_id}: {e}")
+                
+                # If still not found, return default idle state
+                if user_id not in self._states:
+                    return UserStateType.IDLE, {}
             
             user_state = self._states[user_id]
             return user_state.current_state, user_state.temp_data.copy()
     
+    def _load_user_state_from_sheets(self, user_id: int):
+        """Load a specific user's state from Google Sheets"""
+        try:
+            if not self._sync_enabled:
+                return
+            
+            sheets_client = self.lazy_client_manager.get_sheets_client()
+            
+            # Get user's row from UserStates worksheet
+            result = sheets_client._get_service().spreadsheets().values().get(
+                spreadsheetId=sheets_client.spreadsheet_id,
+                range=f"{self._sheets_worksheet}!A:D"
+            ).execute()
+            
+            values = result.get('values', [])
+            
+            # Find user's row
+            for row in values[1:] if len(values) > 1 else []:
+                if len(row) >= 4 and str(row[0]) == str(user_id):
+                    try:
+                        state_value = row[1]
+                        temp_data_json = row[2] if row[2] else '{}'
+                        last_updated_str = row[3]
+                        
+                        # Parse data
+                        state = UserStateType(state_value)
+                        temp_data = json.loads(temp_data_json)
+                        last_updated = datetime.fromisoformat(last_updated_str)
+                        
+                        # Only load recent states (within 24 hours)
+                        if (datetime.now() - last_updated).total_seconds() < 24 * 3600:
+                            user_state = UserState(
+                                user_id=user_id,
+                                current_state=state,
+                                temp_data=temp_data,
+                                last_updated=last_updated
+                            )
+                            self._states[user_id] = user_state
+                            logger.debug(f"Loaded state for user {user_id} from Google Sheets")
+                        
+                        break
+                        
+                    except Exception as e:
+                        logger.warning(f"Failed to parse state for user {user_id}: {e}")
+                        break
+            
+        except Exception as e:
+            logger.error(f"Failed to load user state from sheets for {user_id}: {e}")
+    
     def clear_user_state(self, user_id: int) -> None:
         """
-        Clear user state and reset to idle.
+        Clear user state and reset to idle, also remove from Google Sheets.
         
         Args:
             user_id: Telegram user ID
@@ -173,9 +488,15 @@ class StateManager:
         
         with user_lock:
             if user_id in self._states:
-                user_state = self._states[user_id]
-                user_state.current_state = UserStateType.IDLE
-                user_state.clear_temp_data()
+                # Remove from memory
+                del self._states[user_id]
+                
+                # Remove from Google Sheets
+                if self._sync_enabled:
+                    try:
+                        self._delete_state_from_sheets(user_id)
+                    except Exception as e:
+                        logger.error(f"Failed to delete state from sheets for user {user_id}: {e}")
                 
                 logger.debug("Cleared state for user %d", user_id)
     
@@ -439,3 +760,43 @@ class StateManager:
         except Exception as e:
             logger.error(f"Error in memory check and cleanup: {e}")
             return False
+    
+    def force_sync_with_sheets(self) -> bool:
+        """
+        Force immediate sync with Google Sheets (for debugging/monitoring)
+        
+        Returns:
+            bool: True if sync was successful
+        """
+        try:
+            if not self._sync_enabled:
+                logger.warning("Sheets sync is disabled")
+                return False
+            
+            with self._global_lock:
+                # Save all active states to sheets
+                for user_id, user_state in self._states.items():
+                    self._save_state_to_sheets(user_id, user_state)
+                
+                self._last_sync = datetime.now()
+                logger.info(f"Force synced {len(self._states)} states with Google Sheets")
+                return True
+            
+        except Exception as e:
+            logger.error(f"Failed to force sync with sheets: {e}")
+            return False
+    
+    def get_sync_status(self) -> Dict[str, Any]:
+        """
+        Get current sync status information
+        
+        Returns:
+            Dict with sync status information
+        """
+        return {
+            'sync_enabled': self._sync_enabled,
+            'memory_states_count': len(self._states),
+            'last_sync': self._last_sync.isoformat() if self._last_sync else None,
+            'sync_interval_minutes': self._sync_interval,
+            'worksheet_name': self._sheets_worksheet
+        }
