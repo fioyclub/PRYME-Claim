@@ -4,6 +4,7 @@ Handles Telegram webhook/polling and message routing with comprehensive error ha
 """
 
 import logging
+import gc
 from typing import Optional
 from telegram import Update, Bot
 from telegram.ext import Updater, CommandHandler, MessageHandler, CallbackQueryHandler, Filters
@@ -18,6 +19,13 @@ from keyboards import KeyboardBuilder
 from error_handler import global_error_handler, with_error_handling
 
 logger = logging.getLogger(__name__)
+
+try:
+    import psutil
+    PSUTIL_AVAILABLE = True
+except ImportError:
+    PSUTIL_AVAILABLE = False
+    logger.warning("psutil not available, memory monitoring disabled")
 
 
 class TelegramBot:
@@ -50,6 +58,53 @@ class TelegramBot:
         self._setup_handlers()
         
         logger.info("TelegramBot initialized with v13.15 Updater")
+    
+    def _log_memory_usage(self, operation: str, stage: str) -> float:
+        """
+        Log current memory usage for monitoring
+        
+        Args:
+            operation: Operation name (e.g., '/start', '/claim')
+            stage: Stage of operation (e.g., 'begin', 'end', 'after_gc')
+            
+        Returns:
+            Current memory usage in MB
+        """
+        if not PSUTIL_AVAILABLE:
+            return 0.0
+        
+        try:
+            process = psutil.Process()
+            memory_mb = process.memory_info().rss / 1024 / 1024
+            logger.info(f"[MEMORY] {operation} {stage}: {memory_mb:.2f} MB")
+            return memory_mb
+        except Exception as e:
+            logger.error(f"Error getting memory usage: {e}")
+            return 0.0
+    
+    def _cleanup_and_monitor_memory(self, operation: str, objects_to_clean: list = None) -> None:
+        """
+        Clean up objects and monitor memory usage
+        
+        Args:
+            operation: Operation name for logging
+            objects_to_clean: List of objects to delete
+        """
+        try:
+            # Clean up specified objects
+            if objects_to_clean:
+                for obj in objects_to_clean:
+                    if obj is not None:
+                        del obj
+            
+            # Force garbage collection
+            gc.collect()
+            
+            # Log memory after cleanup
+            self._log_memory_usage(operation, "after_cleanup")
+            
+        except Exception as e:
+            logger.error(f"Error in memory cleanup for {operation}: {e}")
     
     def _setup_handlers(self):
         """Setup all message and callback handlers"""
@@ -109,12 +164,21 @@ class TelegramBot:
             raise
     
     def handle_start_command(self, update: Update, context):
-        """Handle /start command with optimized HTML format and dynamic user name"""
+        """Handle /start command with optimized memory management"""
+        # Memory monitoring - start
+        memory_start = self._log_memory_usage("/start", "begin")
+        
+        user_data = None
+        keyboard = None
+        
         try:
             user_id = update.effective_user.id
             telegram_name = update.effective_user.first_name or "User"
             
             logger.info(f"User {user_id} ({telegram_name}) started bot")
+            
+            # Check memory and cleanup if needed before processing
+            self.state_manager.check_memory_and_cleanup(threshold_mb=300.0)
             
             # Check if user is registered (v13.15 - synchronous call)
             is_registered = self.user_manager.is_user_registered(user_id)
@@ -147,9 +211,18 @@ class TelegramBot:
                 parse_mode=ParseMode.HTML
             )
             
+            # Memory monitoring - end
+            memory_end = self._log_memory_usage("/start", "end")
+            if PSUTIL_AVAILABLE and memory_start > 0:
+                memory_diff = memory_end - memory_start
+                logger.info(f"[MEMORY] /start memory diff: {memory_diff:+.2f} MB")
+            
         except Exception as e:
             logger.error(f"Error handling start command: {e}")
             self._send_error_message(update, "Failed to process start command, please try again later.")
+        finally:
+            # Clean up and monitor memory
+            self._cleanup_and_monitor_memory("/start", [user_data, keyboard])
     
     def handle_help_command(self, update: Update, context):
         """Handle /help command"""
@@ -220,7 +293,12 @@ class TelegramBot:
             self._send_error_message(update, "Failed to process register command, please try again later.")
     
     def handle_claim_command(self, update: Update, context):
-        """Handle /claim command"""
+        """Handle /claim command with memory optimization"""
+        # Memory monitoring - start
+        memory_start = self._log_memory_usage("/claim", "begin")
+        
+        result = None
+        
         try:
             user_id = update.effective_user.id
             
@@ -243,10 +321,19 @@ class TelegramBot:
                 )
             else:
                 update.message.reply_text(result['message'])
+            
+            # Memory monitoring - end
+            memory_end = self._log_memory_usage("/claim", "end")
+            if PSUTIL_AVAILABLE and memory_start > 0:
+                memory_diff = memory_end - memory_start
+                logger.info(f"[MEMORY] /claim memory diff: {memory_diff:+.2f} MB")
                 
         except Exception as e:
             logger.error(f"Error handling claim command: {e}")
             self._send_error_message(update, "Failed to process claim command, please try again later.")
+        finally:
+            # Clean up and monitor memory
+            self._cleanup_and_monitor_memory("/claim", [result])
     
     def handle_dayoff_command(self, update: Update, context):
         """Handle /dayoff command"""
