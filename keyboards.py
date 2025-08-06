@@ -167,6 +167,22 @@ class KeyboardBuilder:
         return InlineKeyboardMarkup(keyboard)
 
     @staticmethod
+    def universal_start_keyboard() -> InlineKeyboardMarkup:
+        """
+        Create universal start keyboard with both registration and claim options.
+        This provides a universal interface without needing to check user registration status.
+        
+        Returns:
+            InlineKeyboardMarkup: Keyboard with register and claim options
+        """
+        keyboard = [
+            [InlineKeyboardButton("Register 📝", callback_data="register_now")],
+            [InlineKeyboardButton("Submit Claim 💰", callback_data="start_claim")],
+            [InlineKeyboardButton("Request Day-off 🗓️", callback_data="start_dayoff")]
+        ]
+        return InlineKeyboardMarkup(keyboard)
+
+    @staticmethod
     def custom_keyboard(buttons: List[Tuple[str, str]], columns: int = 1) -> InlineKeyboardMarkup:
         """
         Create custom inline keyboard with specified buttons.
