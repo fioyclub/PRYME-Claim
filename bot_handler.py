@@ -177,28 +177,15 @@ class TelegramBot:
             
             logger.info(f"User {user_id} ({telegram_name}) started bot")
             
-            # Check memory and cleanup if needed before processing
-            self.state_manager.check_memory_and_cleanup(threshold_mb=300.0)
+            # Skip memory cleanup to avoid triggering unnecessary operations
             
-            # Optimized approach: Try to get user data first, if not found, user is not registered
-            # This reduces API calls from 2 to 1 for registered users, and 0 for unregistered users
-            try:
-                user_data = self.user_manager.get_user_data(user_id)
-                if user_data:
-                    # User is registered
-                    display_name = user_data.name
-                    keyboard = KeyboardBuilder.start_claim_keyboard()
-                    logger.info(f"Registered user {user_id} ({display_name}) accessed /start")
-                else:
-                    # User is not registered - no Google API calls made
-                    display_name = telegram_name
-                    keyboard = KeyboardBuilder.register_now_keyboard()
-                    logger.info(f"Unregistered user {user_id} ({telegram_name}) accessed /start - no API calls made")
-            except Exception as e:
-                # Fallback: assume user is not registered
-                logger.warning(f"Error checking user {user_id} registration status: {e}")
-                display_name = telegram_name
-                keyboard = KeyboardBuilder.register_now_keyboard()
+            # Ultra-optimized approach: For /start, use universal keyboard without API calls
+            # Registration status will be checked when user tries to use specific features
+            display_name = telegram_name
+            keyboard = KeyboardBuilder.universal_start_keyboard()
+            
+            # Log that we're using zero-API approach for /start
+            logger.info(f"User {user_id} ({telegram_name}) accessed /start - zero Google API calls")
             
             # Optimized welcome message with HTML format and emojis
             message = (
@@ -403,6 +390,9 @@ class TelegramBot:
             
             elif callback_data == 'register_now':
                 self._handle_register_now_callback(query)
+            
+            elif callback_data == 'start_dayoff':
+                self._handle_start_dayoff_callback(query)
             
             elif callback_data.startswith('dayoff_type_'):
                 self._handle_dayoff_type_callback(query, callback_data, current_state, temp_data)
@@ -702,6 +692,17 @@ class TelegramBot:
             self._safe_edit_message(query, result['message'], keyboard)
         else:
             self._safe_edit_message(query, result['message'])
+    
+    def _handle_start_dayoff_callback(self, query):
+        """Handle start day-off callback"""
+        user_id = query.from_user.id
+        
+        logger.info(f"User {user_id} clicked start day-off button")
+        
+        # Start day-off request process
+        result = self.dayoff_manager.start_dayoff_request(user_id)
+        
+        self._safe_edit_message(query, result['message'], result.get('keyboard'))
     
     def _handle_dayoff_type_callback(self, query, callback_data, current_state, temp_data):
         """Handle day-off type selection callback"""
