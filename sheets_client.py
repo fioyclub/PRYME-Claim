@@ -410,32 +410,75 @@ class SheetsClient:
             raise
     
     def _get_user_sync(self, user_id: int) -> Optional[Dict[str, Any]]:
-        """Synchronous user lookup"""
+        """Optimized synchronous user lookup with memory management"""
+        import gc
+        
         service = self._get_service()
         
         # Search in all possible role worksheets
         worksheets = ['Staff', 'Manager', 'Ambassador']
         
         for worksheet in worksheets:
+            result = None
+            values = None
+            
             try:
+                # Use batch request to limit data retrieval
+                # First, try to get only the first 100 rows to limit memory usage
                 result = service.spreadsheets().values().get(
                     spreadsheetId=self.spreadsheet_id,
-                    range=f"{worksheet}!A:E"
+                    range=f"{worksheet}!A1:E100"  # Limit to first 100 rows
                 ).execute()
                 
                 values = result.get('values', [])
                 
                 # Skip header row if it exists
                 if values and len(values) > 1:
-                    for row in values[1:]:
+                    for row_idx, row in enumerate(values[1:], 1):  # Start from row 1 (skip header)
                         if len(row) > 0 and str(row[0]) == str(user_id):
-                            return {
+                            user_data = {
                                 'telegram_user_id': int(row[0]) if row[0] else None,
                                 'name': row[1] if len(row) > 1 else '',
                                 'phone': row[2] if len(row) > 2 else '',
                                 'role': row[3] if len(row) > 3 else worksheet,
                                 'register_date': row[4] if len(row) > 4 else ''
                             }
+                            
+                            # Clear large objects immediately
+                            del result, values
+                            gc.collect()
+                            
+                            return user_data
+                
+                # If not found in first 100 rows, try next batch
+                if len(values) >= 100:  # If we got 100 rows, there might be more
+                    # Clear current data before next request
+                    del result, values
+                    gc.collect()
+                    
+                    # Get next batch (rows 101-200)
+                    result = service.spreadsheets().values().get(
+                        spreadsheetId=self.spreadsheet_id,
+                        range=f"{worksheet}!A101:E200"
+                    ).execute()
+                    
+                    values = result.get('values', [])
+                    
+                    for row in values:
+                        if len(row) > 0 and str(row[0]) == str(user_id):
+                            user_data = {
+                                'telegram_user_id': int(row[0]) if row[0] else None,
+                                'name': row[1] if len(row) > 1 else '',
+                                'phone': row[2] if len(row) > 2 else '',
+                                'role': row[3] if len(row) > 3 else worksheet,
+                                'register_date': row[4] if len(row) > 4 else ''
+                            }
+                            
+                            # Clear large objects immediately
+                            del result, values
+                            gc.collect()
+                            
+                            return user_data
                             
             except HttpError as e:
                 if e.resp.status == 400:
@@ -447,6 +490,16 @@ class SheetsClient:
             except Exception as e:
                 logger.error(f"Unexpected error searching in worksheet {worksheet}: {e}")
                 continue
+            finally:
+                # Always clean up large objects
+                try:
+                    if result:
+                        del result
+                    if values:
+                        del values
+                    gc.collect()
+                except:
+                    pass
         
         return None
     
