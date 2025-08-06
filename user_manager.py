@@ -10,7 +10,7 @@ import gc
 from datetime import datetime
 from typing import Optional, Dict, Any, Tuple
 from models import UserRegistration, UserRole, UserStateType
-from state_manager import StateManager
+
 from validation import (
     validate_name, validate_phone_number, validate_telegram_user_id_legacy,
     get_validation_help_message
