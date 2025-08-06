@@ -214,8 +214,11 @@ class ClaimsManager:
                 success = True
                 error_msg = None
                 
-                # Clear photo data reference immediately after upload
-                logger.debug(f"Photo upload successful for user {user_id}, clearing memory")
+                # Release memory immediately after successful upload to reduce memory usage
+                del photo_data
+                import gc
+                gc.collect()
+                logger.info("[MEMORY] Released file_data after successful Drive upload")
                 
             except Exception as e:
                 success = False
