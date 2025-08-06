@@ -117,7 +117,7 @@ class UserManager:
                 name=user_data['name'],
                 phone=user_data['phone'],
                 role=UserRole(user_data['role']),
-                register_date=datetime.fromisoformat(user_data['register_date']) 
+                register_date=datetime.strptime(user_data['register_date'], '%d/%m/%Y %I:%M%p') 
                     if user_data['register_date'] else datetime.now()
             )
             
