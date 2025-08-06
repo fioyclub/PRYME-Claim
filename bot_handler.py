@@ -399,13 +399,29 @@ class TelegramBot:
         
         logger.info(f"User {user_id} selected role: {role}")
         
-        # Process role selection and complete registration
-        result = self.user_manager.process_registration_step(user_id, 'role', role)
+        # Get registration data from context
+        name = context.user_data.get('name')
+        phone = context.user_data.get('phone')
         
-        if result['success']:
-            # Registration completed
+        if not name or not phone:
             query.edit_message_text(
-                result['message'],
+                "❌ Registration data missing. Please start again with /register",
+                reply_markup=KeyboardBuilder.register_now_keyboard()
+            )
+            context.user_data.clear()
+            return ConversationHandler.END
+        
+        # Save registration to Google Sheets
+        success = self.user_manager.save_registration(user_id, name, phone, role)
+        
+        if success:
+            # Registration completed successfully
+            query.edit_message_text(
+                f"✅ Registration completed successfully!\n\n"
+                f"👤 Name: {name}\n"
+                f"📱 Phone: {phone}\n"
+                f"🏢 Role: {role}\n\n"
+                f"You can now use all bot features!",
                 reply_markup=KeyboardBuilder.start_claim_keyboard(),
                 parse_mode=ParseMode.HTML
             )
@@ -417,7 +433,7 @@ class TelegramBot:
         else:
             # Registration failed
             query.edit_message_text(
-                result['message'],
+                "❌ Failed to save registration. Please try again.",
                 reply_markup=KeyboardBuilder.role_selection_keyboard(),
                 parse_mode=ParseMode.HTML
             )
