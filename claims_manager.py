@@ -36,19 +36,16 @@ class ClaimsManager:
     amount input, photo upload, and final submission with Google Sheets and Drive integration.
     """
     
-    def __init__(self, sheets_client: SheetsClient, drive_client: DriveClient, 
-                 state_manager: StateManager, config: Config):
+    def __init__(self, lazy_client_manager, state_manager: StateManager, config: Config):
         """
-        Initialize the ClaimsManager.
+        Initialize the ClaimsManager with lazy loading.
         
         Args:
-            sheets_client: Google Sheets client for data storage
-            drive_client: Google Drive client for photo uploads
+            lazy_client_manager: Lazy client manager for Google API clients
             state_manager: State manager for tracking user conversations
             config: Configuration instance for accessing environment variables
         """
-        self.sheets_client = sheets_client
-        self.drive_client = drive_client
+        self.lazy_client_manager = lazy_client_manager
         self.state_manager = state_manager
         self.config = config
         self.error_handler = global_error_handler
@@ -452,13 +449,14 @@ class ClaimsManager:
             
             logger.info(f"Uploading receipt for user {user_id}, category {category} (base: {base_category}) to folder {category_folder_id}")
             
-            # Upload to category-specific folder
-            file_id = self.drive_client._upload_photo_sync(
+            # Upload to category-specific folder (lazy loading)
+            drive_client = self.lazy_client_manager.get_drive_client()
+            file_id = drive_client._upload_photo_sync(
                 photo_data, filename, category_folder_id
             )
             
             # Get shareable link for the uploaded file
-            shareable_link = self.drive_client._get_shareable_link_sync(file_id)
+            shareable_link = drive_client._get_shareable_link_sync(file_id)
             
             logger.info(f"Successfully uploaded receipt for user {user_id}, category {category}, link: {shareable_link}")
             return shareable_link
@@ -521,8 +519,9 @@ class ClaimsManager:
             str: User's registered name or user_id as fallback
         """
         try:
-            # Get user data from sheets_client
-            user_data = self.sheets_client._get_user_sync(user_id)
+            # Get user data from sheets_client (lazy loading)
+            sheets_client = self.lazy_client_manager.get_sheets_client()
+            user_data = sheets_client._get_user_sync(user_id)
             if user_data and 'name' in user_data:
                 return user_data['name']
             else:
@@ -543,8 +542,9 @@ class ClaimsManager:
             str: User's role (Staff/Manager/Ambassador) or 'Staff' as fallback
         """
         try:
-            # Get user data from sheets_client
-            user_data = self.sheets_client._get_user_sync(user_id)
+            # Get user data from sheets_client (lazy loading)
+            sheets_client = self.lazy_client_manager.get_sheets_client()
+            user_data = sheets_client._get_user_sync(user_id)
             if user_data and 'role' in user_data:
                 return user_data['role']
             else:
@@ -603,9 +603,10 @@ class ClaimsManager:
                 claim.status.value                 # Status
             ]
             
-            # Submit to role-specific Claims sheet
+            # Submit to role-specific Claims sheet (lazy loading)
             worksheet_name = f"{user_role} Claims"  # 'Staff Claims', 'Manager Claims', or 'Ambassador Claims'
-            success = self.sheets_client._append_data_sync(worksheet_name, [values], 'A:F')
+            sheets_client = self.lazy_client_manager.get_sheets_client()
+            success = sheets_client._append_data_sync(worksheet_name, [values], 'A:F')
             
             if success:
                 logger.info(f"Successfully submitted claim for user {user_id} ({user_name}) to {worksheet_name} sheet")
