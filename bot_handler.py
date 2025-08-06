@@ -180,15 +180,23 @@ class TelegramBot:
             # Check memory and cleanup if needed before processing
             self.state_manager.check_memory_and_cleanup(threshold_mb=300.0)
             
-            # Check if user is registered (v13.15 - synchronous call)
-            is_registered = self.user_manager.is_user_registered(user_id)
-            
-            # Get user name (registered name if available, otherwise Telegram name)
-            if is_registered:
+            # Optimized approach: Try to get user data first, if not found, user is not registered
+            # This reduces API calls from 2 to 1 for registered users, and 0 for unregistered users
+            try:
                 user_data = self.user_manager.get_user_data(user_id)
-                display_name = user_data.name if user_data else telegram_name
-                keyboard = KeyboardBuilder.start_claim_keyboard()
-            else:
+                if user_data:
+                    # User is registered
+                    display_name = user_data.name
+                    keyboard = KeyboardBuilder.start_claim_keyboard()
+                    logger.info(f"Registered user {user_id} ({display_name}) accessed /start")
+                else:
+                    # User is not registered - no Google API calls made
+                    display_name = telegram_name
+                    keyboard = KeyboardBuilder.register_now_keyboard()
+                    logger.info(f"Unregistered user {user_id} ({telegram_name}) accessed /start - no API calls made")
+            except Exception as e:
+                # Fallback: assume user is not registered
+                logger.warning(f"Error checking user {user_id} registration status: {e}")
                 display_name = telegram_name
                 keyboard = KeyboardBuilder.register_now_keyboard()
             
