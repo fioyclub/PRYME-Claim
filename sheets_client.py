@@ -503,6 +503,45 @@ class SheetsClient:
         
         return None
     
+    async def ensure_worksheet_headers(self, worksheet: str):
+        """
+        Ensure worksheet has proper headers for UserStates
+        
+        Args:
+            worksheet: Name of the worksheet
+        """
+        try:
+            service = self._get_service()
+            
+            # Check if worksheet has headers
+            result = service.spreadsheets().values().get(
+                spreadsheetId=self.spreadsheet_id,
+                range=f"{worksheet}!A1:D1"
+            ).execute()
+            
+            values = result.get('values', [])
+            
+            if not values or len(values[0]) < 4:
+                # Set headers for UserStates worksheet
+                if worksheet == "UserStates":
+                    headers = [['user_id', 'state', 'temp_data', 'last_updated']]
+                else:
+                    # Default headers for other worksheets
+                    headers = [['user_id', 'state', 'temp_data', 'last_updated']]
+                
+                service.spreadsheets().values().update(
+                    spreadsheetId=self.spreadsheet_id,
+                    range=f"{worksheet}!A1",
+                    valueInputOption='RAW',
+                    body={'values': headers}
+                ).execute()
+                
+                logger.info(f"Set headers for worksheet: {worksheet}")
+            
+        except Exception as e:
+            logger.error(f"Failed to ensure headers for worksheet {worksheet}: {e}")
+            raise
+    
     async def validate_spreadsheet_access(self) -> bool:
         """
         Validate that the client can access the spreadsheet
