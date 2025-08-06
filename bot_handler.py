@@ -181,7 +181,7 @@ class TelegramBot:
         self.dispatcher.add_handler(CommandHandler("start", self.handle_start_command))
         self.dispatcher.add_handler(CommandHandler("help", self.handle_help_command))
         # Remove CommandHandler for dayoff since it's now handled by ConversationHandler
-        // self.dispatcher.add_handler(CommandHandler("dayoff", self.handle_dayoff_command))
+        # self.dispatcher.add_handler(CommandHandler("dayoff", self.handle_dayoff_command))
         
         # General callback handler for non-conversation callbacks
         self.dispatcher.add_handler(CallbackQueryHandler(self.handle_general_callback))
@@ -745,26 +745,26 @@ class TelegramBot:
             logger.error(f"Error handling help command: {e}")
             self._send_error_message(update, "Failed to get help information, please try again later.")
     
-    // Remove handle_dayoff_command since /dayoff is now entry point of ConversationHandler
-    // def handle_dayoff_command(self, update: Update, context):
-    //     """Handle /dayoff command"""
-    //     try:
-    //         user_id = update.effective_user.id
-    //         
-    //         logger.info(f"User {user_id} initiated day-off request")
-    //         
-    //         # Start day-off request process
-    //         result = self.dayoff_manager.start_dayoff_request(user_id)
-    //         
-    //         update.message.reply_text(
-    //             result['message'],
-    //             reply_markup=result.get('keyboard'),
-    //             parse_mode=ParseMode.HTML
-    //         )
-    //             
-    //     except Exception as e:
-    //         logger.error(f"Error handling dayoff command: {e}")
-    //         self._send_error_message(update, "Failed to process day-off command, please try again later.")
+    # Remove handle_dayoff_command since /dayoff is now entry point of ConversationHandler
+    # def handle_dayoff_command(self, update: Update, context):
+    #     """Handle /dayoff command"""
+    #     try:
+    #         user_id = update.effective_user.id
+    #         
+    #         logger.info(f"User {user_id} initiated day-off request")
+    #         
+    #         # Start day-off request process
+    #         result = self.dayoff_manager.start_dayoff_request(user_id)
+    #         
+    #         update.message.reply_text(
+    #             result['message'],
+    #             reply_markup=result.get('keyboard'),
+    #             parse_mode=ParseMode.HTML
+    #         )
+    #             
+    #     except Exception as e:
+    #         logger.error(f"Error handling dayoff command: {e}")
+    #         self._send_error_message(update, "Failed to process day-off command, please try again later.")
     
     # ==================== DAY-OFF CONVERSATION HANDLERS ====================
     
@@ -1032,4 +1032,3 @@ class TelegramBot:
                 query.message.reply_text(text, reply_markup=reply_markup)
             except Exception as e2:
                 logger.error(f"Failed to send new message: {e2}")
-
