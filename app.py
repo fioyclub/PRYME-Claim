@@ -172,6 +172,10 @@ def initialize_bot():
             dayoff_manager=dayoff_manager
         )
         
+        # Note: ConversationHandler state is maintained in-memory and is not shared between workers
+        # To prevent state loss during conversations, we use a single Gunicorn worker
+        # See gunicorn.conf.py for worker configuration
+        
         # Set webhook if URL is provided
         if config.WEBHOOK_URL:
             bot_instance.updater.bot.set_webhook(url=config.WEBHOOK_URL)
