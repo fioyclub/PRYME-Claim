@@ -12,8 +12,7 @@ from datetime import datetime, timezone, timedelta
 from typing import Dict, Optional, Any, Tuple, List
 from io import BytesIO
 
-from models import Claim, ClaimCategory, ClaimStatus, UserStateType
-from state_manager import StateManager
+from models import Claim, ClaimCategory, ClaimStatus
 from sheets_client import SheetsClient
 from drive_client import DriveClient
 from config import Config
@@ -61,43 +60,12 @@ class ClaimsManager:
         
         logger.info("ClaimsManager initialized")
     
-    def start_claim_process(self, user_id: int) -> Dict[str, Any]:
-        """
-        Start the claim submission process for a user.
-        
-        Args:
-            user_id: Telegram user ID
-            
-        Returns:
-            Dict containing response message and keyboard
-        """
-        try:
-            # Set user state to category selection
-            self.state_manager.set_user_state(
-                user_id, 
-                UserStateType.CLAIMING_CATEGORY,
-                {'step': 'category', 'claim_data': {}}
-            )
-            
-            logger.info(f"Started claim process for user {user_id}")
-            
-            return {
-                'message': 'Please select expense category:',
-                'keyboard': KeyboardBuilder.claim_categories_keyboard(),
-                'success': True
-            }
-            
-        except Exception as e:
-            logger.error(f"Failed to start claim process for user {user_id}: {e}")
-            return {
-                'message': 'Error starting claim process, please try again later.',
-                'keyboard': None,
-                'success': False
-            }
+    # Claim process is now handled by ConversationHandler in bot_handler.py
+    # These methods are simplified for business logic only
     
     def process_claim_step(self, user_id: int, step: str, data: Any) -> Dict[str, Any]:
         """
-        Process a step in the claim submission flow.
+        Process a step in the claim submission flow (simplified for ConversationHandler).
         
         Args:
             user_id: Telegram user ID
@@ -108,18 +76,16 @@ class ClaimsManager:
             Dict containing response message, keyboard, and success status
         """
         try:
-            current_state, temp_data = self.state_manager.get_user_state(user_id)
-            
             if step == 'category':
-                return self._process_category_selection(user_id, data, temp_data)
+                return self._process_category_selection(user_id, data)
             elif step == 'amount':
-                return self._process_amount_input(user_id, data, temp_data)
+                return self._process_amount_input(user_id, data)
             elif step == 'other_description':
-                return self._process_other_description_input(user_id, data, temp_data)
+                return self._process_other_description_input(user_id, data)
             elif step == 'photo':
-                return self._process_photo_upload(user_id, data, temp_data)
+                return self._process_photo_upload(user_id, data)
             elif step == 'confirm':
-                return self._process_confirmation(user_id, data, temp_data)
+                return self._process_confirmation(user_id, data)
             else:
                 logger.warning(f"Unknown claim step '{step}' for user {user_id}")
                 return {
