@@ -124,7 +124,7 @@ def create_app():
     return app
 
 def initialize_bot():
-    """Initialize the Telegram bot instance"""
+    """Initialize the Telegram bot instance with lazy loading"""
     global bot_instance
     
     try:
@@ -134,27 +134,31 @@ def initialize_bot():
         from claims_manager import ClaimsManager
         from dayoff_manager import DayOffManager
         from state_manager import StateManager
-        from sheets_client import SheetsClient
-        from drive_client import DriveClient
+        from lazy_client_manager import get_lazy_client_manager
         
-        logger.info("Initializing bot for Gunicorn deployment...")
+        logger.info("Initializing bot for Gunicorn deployment with lazy loading...")
+        
+        # Memory monitoring - start
+        try:
+            import psutil
+            process = psutil.Process()
+            memory_start = process.memory_info().rss / 1024 / 1024
+            logger.info(f"[MEMORY] Bot initialization start: {memory_start:.2f} MB")
+        except ImportError:
+            memory_start = 0
+            logger.warning("psutil not available, memory monitoring disabled")
         
         # Load configuration
         config = Config()
         
-        # Create token.json file from environment variable
-        with open("token.json", "w") as f:
-            f.write(config.GOOGLE_TOKEN_JSON)
+        # Initialize lazy client manager (no Google API clients initialized yet)
+        lazy_client_manager = get_lazy_client_manager(config)
         
-        # Initialize Google API clients
-        sheets_client = SheetsClient(spreadsheet_id=config.GOOGLE_SPREADSHEET_ID)
-        drive_client = DriveClient(root_folder_id=config.GOOGLE_DRIVE_FOLDER_ID)
-        
-        # Initialize managers with optimized settings
+        # Initialize managers with lazy loading
         state_manager = StateManager(cleanup_interval_minutes=5)  # More frequent cleanup
-        user_manager = UserManager(sheets_client, state_manager)
-        claims_manager = ClaimsManager(sheets_client, drive_client, state_manager, config)
-        dayoff_manager = DayOffManager(sheets_client, state_manager, user_manager)
+        user_manager = UserManager(lazy_client_manager, state_manager)
+        claims_manager = ClaimsManager(lazy_client_manager, state_manager, config)
+        dayoff_manager = DayOffManager(lazy_client_manager, state_manager, user_manager)
         
         # Initialize bot handler
         bot_instance = TelegramBot(
@@ -170,7 +174,24 @@ def initialize_bot():
             bot_instance.updater.bot.set_webhook(url=config.WEBHOOK_URL)
             logger.info(f"Webhook set to: {config.WEBHOOK_URL}")
         
-        logger.info("Bot initialized successfully for Gunicorn with memory optimizations")
+        # Memory monitoring - end
+        if memory_start > 0:
+            try:
+                memory_end = process.memory_info().rss / 1024 / 1024
+                memory_diff = memory_end - memory_start
+                logger.info(f"[MEMORY] Bot initialization end: {memory_end:.2f} MB (diff: {memory_diff:+.2f} MB)")
+                
+                # Force garbage collection
+                import gc
+                gc.collect()
+                memory_after_gc = process.memory_info().rss / 1024 / 1024
+                gc_freed = memory_end - memory_after_gc
+                logger.info(f"[MEMORY] After GC: {memory_after_gc:.2f} MB (GC freed: {gc_freed:.2f} MB)")
+                
+            except Exception as e:
+                logger.error(f"Error in memory monitoring: {e}")
+        
+        logger.info("Bot initialized successfully with lazy loading - Google API clients will be loaded on demand")
         
     except Exception as e:
         logger.error(f"Failed to initialize bot: {e}")
