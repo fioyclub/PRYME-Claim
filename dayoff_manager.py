@@ -28,17 +28,15 @@ class DayOffManager:
     and stores requests in Google Sheets.
     """
     
-    def __init__(self, lazy_client_manager, state_manager: StateManager, user_manager: UserManager):
+    def __init__(self, lazy_client_manager, user_manager: UserManager):
         """
         Initialize the DayOffManager with lazy loading.
         
         Args:
             lazy_client_manager: Lazy client manager for Google API clients
-            state_manager: State manager for tracking conversation states
             user_manager: User manager for user data and permissions
         """
         self.lazy_client_manager = lazy_client_manager
-        self.state_manager = state_manager
         self.user_manager = user_manager
         self.error_handler = global_error_handler
         
