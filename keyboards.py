@@ -98,6 +98,21 @@ class KeyboardBuilder:
             [InlineKeyboardButton("Register NOW 📝", callback_data="register_now")]
         ]
         return InlineKeyboardMarkup(keyboard)
+    
+    @staticmethod
+    def universal_start_keyboard() -> InlineKeyboardMarkup:
+        """
+        Create universal inline keyboard for /start command (no API calls needed).
+        
+        Returns:
+            InlineKeyboardMarkup: Keyboard with all main functions
+        """
+        keyboard = [
+            [InlineKeyboardButton("📝 Register", callback_data="register_now")],
+            [InlineKeyboardButton("💰 Submit Claim", callback_data="start_claim")],
+            [InlineKeyboardButton("🗓️ Request Day-off", callback_data="start_dayoff")]
+        ]
+        return InlineKeyboardMarkup(keyboard)
 
     @staticmethod
     def start_claim_keyboard() -> InlineKeyboardMarkup:
