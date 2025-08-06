@@ -10,7 +10,7 @@ from bot_handler import TelegramBot
 from user_manager import UserManager
 from claims_manager import ClaimsManager
 from dayoff_manager import DayOffManager
-from state_manager import StateManager
+# StateManager removed - using ConversationHandler now
 from sheets_client import SheetsClient
 from drive_client import DriveClient
 
@@ -49,29 +49,8 @@ def initialize_google_clients(config: Config):
         logger.error(f"Failed to initialize Google API clients: {e}")
         raise
 
-def initialize_managers(sheets_client, drive_client, config):
-    """Initialize application managers"""
-    try:
-        logger.info("Initializing application managers...")
-        
-        # Initialize state manager
-        state_manager = StateManager()
-        
-        # Initialize user manager
-        user_manager = UserManager(sheets_client, state_manager)
-        
-        # Initialize claims manager
-        claims_manager = ClaimsManager(sheets_client, drive_client, state_manager, config)
-        
-        # Initialize day-off manager
-        dayoff_manager = DayOffManager(sheets_client, state_manager, user_manager)
-        
-        logger.info("Application managers initialized successfully")
-        return state_manager, user_manager, claims_manager, dayoff_manager
-        
-    except Exception as e:
-        logger.error(f"Failed to initialize managers: {e}")
-        raise
+# This function is no longer needed as we use lazy loading and ConversationHandler
+# def initialize_managers(sheets_client, drive_client, config):
 
 def start_bot_application(config: Config):
     """Start the main bot application with lazy loading"""
