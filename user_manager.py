@@ -6,11 +6,11 @@ authentication, and permission checking with comprehensive error handling.
 """
 
 import logging
+import gc
 from datetime import datetime
 from typing import Optional, Dict, Any, Tuple
 from models import UserRegistration, UserRole, UserStateType
 from state_manager import StateManager
-from sheets_client import SheetsClient
 from validation import (
     validate_name, validate_phone_number, validate_telegram_user_id_legacy,
     get_validation_help_message
@@ -32,19 +32,19 @@ class UserManager:
     states, and provides user authentication and permission checking.
     """
     
-    def __init__(self, sheets_client: SheetsClient, state_manager: StateManager):
+    def __init__(self, lazy_client_manager, state_manager: StateManager):
         """
-        Initialize the UserManager.
+        Initialize the UserManager with lazy loading.
         
         Args:
-            sheets_client: Google Sheets client for data storage
+            lazy_client_manager: Lazy client manager for Google API clients
             state_manager: State manager for tracking conversation states
         """
-        self.sheets_client = sheets_client
+        self.lazy_client_manager = lazy_client_manager
         self.state_manager = state_manager
         self.error_handler = global_error_handler
         
-        logger.info("UserManager initialized")
+        logger.info("UserManager initialized with lazy loading")
     
     def is_user_registered(self, user_id: int) -> bool:
         """
@@ -67,8 +67,9 @@ class UserManager:
                 logger.warning("Invalid user ID %s: %s", user_id, error_msg)
                 return False
             
-            # Check in Google Sheets
-            user_data = self.sheets_client._get_user_sync(user_id)
+            # Check in Google Sheets (lazy loading)
+            sheets_client = self.lazy_client_manager.get_sheets_client()
+            user_data = sheets_client._get_user_sync(user_id)
             is_registered = user_data is not None
             
             logger.debug("User %d registration status: %s", user_id, is_registered)
@@ -105,8 +106,9 @@ class UserManager:
                 logger.warning("Invalid user ID %s: %s", user_id, error_msg)
                 return None
             
-            # Get data from Google Sheets
-            user_data = self.sheets_client._get_user_sync(user_id)
+            # Get data from Google Sheets (lazy loading)
+            sheets_client = self.lazy_client_manager.get_sheets_client()
+            user_data = sheets_client._get_user_sync(user_id)
             
             if not user_data:
                 return None
@@ -420,8 +422,10 @@ class UserManager:
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
             
+            # Get sheets client with lazy loading
+            sheets_client = self.lazy_client_manager.get_sheets_client()
             success = loop.run_until_complete(
-                self.sheets_client.append_registration_data(registration.role.value, user_data)
+                sheets_client.append_registration_data(registration.role.value, user_data)
             )
             
             if not success:
