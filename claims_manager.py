@@ -63,47 +63,10 @@ class ClaimsManager:
     # Claim process is now handled by ConversationHandler in bot_handler.py
     # These methods are simplified for business logic only
     
-    def process_claim_step(self, user_id: int, step: str, data: Any) -> Dict[str, Any]:
-        """
-        Process a step in the claim submission flow (simplified for ConversationHandler).
-        
-        Args:
-            user_id: Telegram user ID
-            step: Current step ('category', 'amount', 'other_description', 'photo', 'confirm')
-            data: Step-specific data (callback_data, text, photo_data)
-            
-        Returns:
-            Dict containing response message, keyboard, and success status
-        """
-        try:
-            if step == 'category':
-                return self._process_category_selection(user_id, data)
-            elif step == 'amount':
-                return self._process_amount_input(user_id, data)
-            elif step == 'other_description':
-                return self._process_other_description_input(user_id, data)
-            elif step == 'photo':
-                return self._process_photo_upload(user_id, data)
-            elif step == 'confirm':
-                return self._process_confirmation(user_id, data)
-            else:
-                logger.warning(f"Unknown claim step '{step}' for user {user_id}")
-                return {
-                    'message': 'Unknown operation step, please restart the claim.',
-                    'keyboard': KeyboardBuilder.cancel_keyboard(),
-                    'success': False
-                }
-                
-        except Exception as e:
-            logger.error(f"Failed to process claim step {step} for user {user_id}: {e}")
-            return {
-                'message': 'Error processing claim, please try again later.',
-                'keyboard': KeyboardBuilder.cancel_keyboard(),
-                'success': False
-            }
+    # Claim process is now handled by ConversationHandler in bot_handler.py
+    # Individual step methods are called directly by the conversation handlers
     
-    def _process_category_selection(self, user_id: int, callback_data: str, 
-                                        temp_data: Dict[str, Any]) -> Dict[str, Any]:
+    def _process_category_selection(self, user_id: int, callback_data: str) -> Dict[str, Any]:
         """Process category selection step."""
         try:
             # Validate category selection
@@ -115,31 +78,20 @@ class ClaimsManager:
                 }
             
             category = self.category_mapping[callback_data]
-            
-            # Update claim data and move to amount input
-            claim_data = temp_data.get('claim_data', {})
-            claim_data['category'] = category.value
-            
-            self.state_manager.set_user_state(
-                user_id,
-                UserStateType.CLAIMING_AMOUNT,
-                {'step': 'amount', 'claim_data': claim_data}
-            )
-            
             category_display = f"{category.value} {self._get_category_emoji(category)}"
             
             return {
                 'message': f'Selected category: {category_display}\n\nPlease enter amount (RM):',
                 'keyboard': KeyboardBuilder.cancel_keyboard(),
-                'success': True
+                'success': True,
+                'category': category.value
             }
             
         except Exception as e:
             logger.error(f"Failed to process category selection for user {user_id}: {e}")
             raise
     
-    def _process_amount_input(self, user_id: int, amount_text: str, 
-                                  temp_data: Dict[str, Any]) -> Dict[str, Any]:
+    def _process_amount_input(self, user_id: int, amount_text: str, category: str = None) -> Dict[str, Any]:
         """Process amount input step with enhanced error handling and retry flow."""
         try:
             # Validate amount using new validation system
@@ -168,35 +120,23 @@ class ClaimsManager:
                 "Please upload receipt photo:"
             )
             
-            # Update claim data
-            claim_data = temp_data.get('claim_data', {})
-            claim_data['amount'] = validation_result.value
-            
             # Check if category is "Other" - if so, ask for description
-            if claim_data.get('category') == 'Other':
-                self.state_manager.set_user_state(
-                    user_id,
-                    UserStateType.CLAIMING_OTHER_DESCRIPTION,
-                    {'step': 'other_description', 'claim_data': claim_data}
-                )
-                
+            if category and category == 'Other':
                 return {
                     'message': '📝 Please enter what you are claiming for:\n\nExample: Stationery purchase, Parking fee, etc...',
                     'keyboard': KeyboardBuilder.cancel_keyboard(),
-                    'success': True
+                    'success': True,
+                    'amount': validation_result.value,
+                    'needs_description': True
                 }
             else:
                 # For other categories, move directly to photo upload
-                self.state_manager.set_user_state(
-                    user_id,
-                    UserStateType.CLAIMING_PHOTO,
-                    {'step': 'photo', 'claim_data': claim_data}
-                )
-                
                 return {
                     'message': success_response['message'],
                     'keyboard': KeyboardBuilder.cancel_keyboard(),
-                    'success': True
+                    'success': True,
+                    'amount': validation_result.value,
+                    'needs_description': False
                 }
             
         except Exception as e:
@@ -207,8 +147,7 @@ class ClaimsManager:
                 'success': False
             }
     
-    def _process_other_description_input(self, user_id: int, description_text: str, 
-                                           temp_data: Dict[str, Any]) -> Dict[str, Any]:
+    def _process_other_description_input(self, user_id: int, description_text: str) -> Dict[str, Any]:
         """Process Other category description input step."""
         try:
             # Validate description
@@ -229,23 +168,12 @@ class ClaimsManager:
                     'success': False
                 }
             
-            # Update claim data with combined category and description
-            claim_data = temp_data.get('claim_data', {})
-            claim_data['category'] = f"Other : {description}"
-            claim_data['other_description'] = description
-            
-            # Move to photo upload
-            self.state_manager.set_user_state(
-                user_id,
-                UserStateType.CLAIMING_PHOTO,
-                {'step': 'photo', 'claim_data': claim_data}
-            )
-            
             logger.info(f"User {user_id} provided Other description: {description}")
             return {
                 'message': f'✅ Description saved: <i>{description}</i>\n\nPlease upload receipt photo:',
                 'keyboard': KeyboardBuilder.cancel_keyboard(),
-                'success': True
+                'success': True,
+                'description': description
             }
             
         except Exception as e:
@@ -256,8 +184,7 @@ class ClaimsManager:
                 'success': False
             }
     
-    def _process_photo_upload(self, user_id: int, photo_data: bytes, 
-                                  temp_data: Dict[str, Any]) -> Dict[str, Any]:
+    def _process_photo_upload(self, user_id: int, photo_data: bytes, claim_data: Dict[str, Any]) -> Dict[str, Any]:
         """Process photo upload step with memory-optimized error handling."""
         try:
             logger.debug(f"Processing photo upload for user {user_id}, size: {len(photo_data)} bytes")
@@ -281,8 +208,6 @@ class ClaimsManager:
                     'attempt_count': error_response['attempt_count']
                 }
             
-            claim_data = temp_data.get('claim_data', {})
-            
             # Upload photo to Google Drive with memory optimization
             try:
                 receipt_link = self.upload_receipt(user_id, photo_data, claim_data.get('category', 'Other'))
@@ -305,14 +230,8 @@ class ClaimsManager:
                     'success': False
                 }
             
+            # Add receipt link to claim data
             claim_data['receipt_link'] = receipt_link
-            
-            # Move to confirmation step
-            self.state_manager.set_user_state(
-                user_id,
-                UserStateType.CLAIMING_CONFIRM,
-                {'step': 'confirm', 'claim_data': claim_data}
-            )
             
             # Generate confirmation message
             confirmation_message = self._generate_confirmation_message(claim_data)
@@ -320,7 +239,8 @@ class ClaimsManager:
             return {
                 'message': confirmation_message,
                 'keyboard': KeyboardBuilder.confirmation_keyboard(),
-                'success': True
+                'success': True,
+                'receipt_link': receipt_link
             }
             
         except Exception as e:
@@ -335,19 +255,14 @@ class ClaimsManager:
             import gc
             gc.collect()
     
-    def _process_confirmation(self, user_id: int, callback_data: str, 
-                                  temp_data: Dict[str, Any]) -> Dict[str, Any]:
+    def _process_confirmation(self, user_id: int, callback_data: str, claim_data: Dict[str, Any]) -> Dict[str, Any]:
         """Process confirmation step."""
         try:
             if callback_data == 'confirm_yes':
                 # Submit the claim
-                claim_data = temp_data.get('claim_data', {})
                 success = self.submit_claim(user_id, claim_data)
                 
                 if success:
-                    # Clear user state
-                    self.state_manager.clear_user_state(user_id)
-                    
                     return {
                         'message': '✅ Claim submitted successfully!\n\nYour expense claim status: Pending Review',
                         'keyboard': KeyboardBuilder.claim_complete_keyboard(),
@@ -362,8 +277,6 @@ class ClaimsManager:
                     
             elif callback_data == 'confirm_no':
                 # Cancel the claim
-                self.state_manager.clear_user_state(user_id)
-                
                 return {
                     'message': '❌ Claim cancelled.',
                     'keyboard': KeyboardBuilder.claim_complete_keyboard(),
@@ -661,9 +574,6 @@ class ClaimsManager:
             Dict containing response message and keyboard
         """
         try:
-            # Clear user state
-            self.state_manager.clear_user_state(user_id)
-            
             logger.info(f"Cancelled claim process for user {user_id}")
             
             return {
