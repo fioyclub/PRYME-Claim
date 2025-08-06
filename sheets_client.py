@@ -252,11 +252,10 @@ class SheetsClient:
                 # Already has timezone info
                 dt = datetime.fromisoformat(datetime_str.replace('Z', '+00:00'))
             else:
-                # Assume it's already in Malaysia timezone
+                # Assume it's UTC if no timezone
                 dt = datetime.fromisoformat(datetime_str)
-                malaysia_tz = pytz.timezone('Asia/Kuala_Lumpur')
-                if dt.tzinfo is None:
-                    dt = malaysia_tz.localize(dt)
+                utc_tz = pytz.utc
+                dt = utc_tz.localize(dt)
             
             # Convert to Malaysia timezone if needed
             malaysia_tz = pytz.timezone('Asia/Kuala_Lumpur')
