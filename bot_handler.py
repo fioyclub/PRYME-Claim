@@ -180,7 +180,7 @@ class TelegramBot:
         # Basic command handlers
         self.dispatcher.add_handler(CommandHandler("start", self.handle_start_command))
         self.dispatcher.add_handler(CommandHandler("help", self.handle_help_command))
-        // Remove CommandHandler for dayoff since it's now handled by ConversationHandler
+        # Remove CommandHandler for dayoff since it's now handled by ConversationHandler
         // self.dispatcher.add_handler(CommandHandler("dayoff", self.handle_dayoff_command))
         
         # General callback handler for non-conversation callbacks
@@ -1032,3 +1032,4 @@ class TelegramBot:
                 query.message.reply_text(text, reply_markup=reply_markup)
             except Exception as e2:
                 logger.error(f"Failed to send new message: {e2}")
+
