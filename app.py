@@ -93,17 +93,16 @@ def create_app():
             'server': 'gunicorn'
         }
         
-        # Add memory information if bot is initialized
+        # Add basic memory information if available
         if bot_instance is not None:
             try:
-                memory_info = bot_instance.state_manager.get_memory_usage()
-                status_data['memory'] = memory_info
-                
-                # Check if memory is high and trigger cleanup
-                if memory_info.get('available') and memory_info.get('rss_mb', 0) > 350:
-                    cleanup_performed = bot_instance.state_manager.check_memory_and_cleanup(350.0)
-                    status_data['memory']['cleanup_triggered'] = cleanup_performed
-                    
+                import psutil
+                process = psutil.Process()
+                memory_mb = process.memory_info().rss / 1024 / 1024
+                status_data['memory'] = {
+                    'rss_mb': round(memory_mb, 2),
+                    'available': True
+                }
             except Exception as e:
                 status_data['memory'] = {'error': str(e)}
         
@@ -116,32 +115,14 @@ def create_app():
             return jsonify({'error': 'Bot not initialized'}), 503
         
         try:
-            memory_info = bot_instance.state_manager.get_memory_usage()
+            import psutil
+            process = psutil.Process()
+            memory_info = {
+                'rss_mb': round(process.memory_info().rss / 1024 / 1024, 2),
+                'available': True,
+                'state_management': 'ConversationHandler (built-in)'
+            }
             return jsonify(memory_info), 200
-        except Exception as e:
-            return jsonify({'error': str(e)}), 500
-    
-    @app.route('/states')
-    def states_info():
-        """State management monitoring endpoint"""
-        if bot_instance is None:
-            return jsonify({'error': 'Bot not initialized'}), 503
-        
-        try:
-            sync_status = bot_instance.state_manager.get_sync_status()
-            return jsonify(sync_status), 200
-        except Exception as e:
-            return jsonify({'error': str(e)}), 500
-    
-    @app.route('/states/sync', methods=['POST'])
-    def force_sync_states():
-        """Force sync states with Google Sheets"""
-        if bot_instance is None:
-            return jsonify({'error': 'Bot not initialized'}), 503
-        
-        try:
-            success = bot_instance.state_manager.force_sync_with_sheets()
-            return jsonify({'success': success}), 200
         except Exception as e:
             return jsonify({'error': str(e)}), 500
     
@@ -178,19 +159,17 @@ def initialize_bot():
         # Initialize lazy client manager (no Google API clients initialized yet)
         lazy_client_manager = get_lazy_client_manager(config)
         
-        # Initialize managers with lazy loading and persistent state storage
-        state_manager = StateManager(lazy_client_manager, cleanup_interval_minutes=5)  # Google Sheets persistence
-        user_manager = UserManager(lazy_client_manager, state_manager)
-        claims_manager = ClaimsManager(lazy_client_manager, state_manager, config)
-        dayoff_manager = DayOffManager(lazy_client_manager, state_manager, user_manager)
+        # Initialize managers with lazy loading (ConversationHandler manages state)
+        user_manager = UserManager(lazy_client_manager)
+        claims_manager = ClaimsManager(lazy_client_manager, config)
+        dayoff_manager = DayOffManager(lazy_client_manager, user_manager)
         
         # Initialize bot handler
         bot_instance = TelegramBot(
             token=config.TELEGRAM_BOT_TOKEN,
             user_manager=user_manager,
             claims_manager=claims_manager,
-            dayoff_manager=dayoff_manager,
-            state_manager=state_manager
+            dayoff_manager=dayoff_manager
         )
         
         # Set webhook if URL is provided
