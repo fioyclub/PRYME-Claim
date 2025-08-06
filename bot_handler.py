@@ -125,7 +125,8 @@ class TelegramBot:
                 CallbackQueryHandler(self.cancel_register, pattern='^cancel$')
             ],
             name="registration",
-            persistent=False
+            persistent=False  # In-memory state only, requires single worker to maintain state
+                             # For multi-worker setup, would need persistent=True with BasePersistence implementation
         )
         
         # Claim ConversationHandler
