@@ -36,17 +36,15 @@ class ClaimsManager:
     amount input, photo upload, and final submission with Google Sheets and Drive integration.
     """
     
-    def __init__(self, lazy_client_manager, state_manager: StateManager, config: Config):
+    def __init__(self, lazy_client_manager, config: Config):
         """
         Initialize the ClaimsManager with lazy loading.
         
         Args:
             lazy_client_manager: Lazy client manager for Google API clients
-            state_manager: State manager for tracking user conversations
             config: Configuration instance for accessing environment variables
         """
         self.lazy_client_manager = lazy_client_manager
-        self.state_manager = state_manager
         self.config = config
         self.error_handler = global_error_handler
         
