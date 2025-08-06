@@ -48,7 +48,7 @@ class UserManager:
     
     def is_user_registered(self, user_id: int) -> bool:
         """
-        Check if a user is already registered.
+        Check if a user is already registered with memory optimization.
         
         Args:
             user_id: Telegram user ID
@@ -56,6 +56,10 @@ class UserManager:
         Returns:
             True if user is registered, False otherwise
         """
+        import gc
+        
+        user_data = None
+        
         try:
             # Validate user ID
             is_valid, error_msg = validate_telegram_user_id_legacy(user_id)
@@ -73,10 +77,15 @@ class UserManager:
         except Exception as e:
             logger.error("Error checking registration for user %d: %s", user_id, e)
             return False
+        finally:
+            # Clean up user data immediately
+            if user_data:
+                del user_data
+            gc.collect()
     
     def get_user_data(self, user_id: int) -> Optional[UserRegistration]:
         """
-        Get user registration data.
+        Get user registration data with memory optimization.
         
         Args:
             user_id: Telegram user ID
@@ -84,6 +93,11 @@ class UserManager:
         Returns:
             UserRegistration object if found, None otherwise
         """
+        import gc
+        
+        user_data = None
+        registration = None
+        
         try:
             # Validate user ID
             is_valid, error_msg = validate_telegram_user_id_legacy(user_id)
@@ -113,6 +127,11 @@ class UserManager:
         except Exception as e:
             logger.error("Error getting user data for %d: %s", user_id, e)
             return None
+        finally:
+            # Clean up large objects immediately
+            if user_data:
+                del user_data
+            gc.collect()
     
     def start_registration(self, user_id: int) -> Dict[str, Any]:
         """
@@ -504,7 +523,7 @@ class UserManager:
     
     def check_user_permission(self, user_id: int, required_role: Optional[UserRole] = None) -> Tuple[bool, Optional[str]]:
         """
-        Check if user has permission to perform an action.
+        Check if user has permission to perform an action with memory optimization.
         
         Args:
             user_id: Telegram user ID
@@ -513,6 +532,10 @@ class UserManager:
         Returns:
             Tuple of (has_permission, error_message)
         """
+        import gc
+        
+        user_data = None
+        
         try:
             # Check if user is registered
             if not self.is_user_registered(user_id):
@@ -545,3 +568,8 @@ class UserManager:
         except Exception as e:
             logger.error("Error checking permission for user %d: %s", user_id, e)
             return False, "Error checking permissions, please try again later."
+        finally:
+            # Clean up user data immediately
+            if user_data:
+                del user_data
+            gc.collect()
