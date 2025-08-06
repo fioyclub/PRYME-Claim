@@ -7,8 +7,6 @@ import logging
 import gc
 from typing import Optional
 from config import Config
-from sheets_client import SheetsClient
-from drive_client import DriveClient
 
 logger = logging.getLogger(__name__)
 
@@ -26,13 +24,13 @@ class LazyClientManager:
             config: Configuration instance
         """
         self.config = config
-        self._sheets_client: Optional[SheetsClient] = None
-        self._drive_client: Optional[DriveClient] = None
+        self._sheets_client = None
+        self._drive_client = None
         self._initialization_lock = False
         
         logger.info("LazyClientManager initialized - clients will be loaded on demand")
     
-    def get_sheets_client(self) -> SheetsClient:
+    def get_sheets_client(self):
         """
         Get Google Sheets client, initializing if necessary
         
@@ -43,7 +41,7 @@ class LazyClientManager:
             self._initialize_sheets_client()
         return self._sheets_client
     
-    def get_drive_client(self) -> DriveClient:
+    def get_drive_client(self):
         """
         Get Google Drive client, initializing if necessary
         
@@ -67,20 +65,28 @@ class LazyClientManager:
             self._ensure_token_file()
             
             # Initialize with memory monitoring
-            import psutil
-            if psutil:
+            try:
+                import psutil
                 process = psutil.Process()
                 memory_before = process.memory_info().rss / 1024 / 1024
                 logger.info(f"[MEMORY] Before Sheets client init: {memory_before:.2f} MB")
+            except ImportError:
+                memory_before = 0
+            
+            # Import SheetsClient only when needed to avoid loading Google API libraries
+            from sheets_client import SheetsClient
             
             self._sheets_client = SheetsClient(
                 spreadsheet_id=self.config.GOOGLE_SPREADSHEET_ID
             )
             
-            if psutil:
-                memory_after = process.memory_info().rss / 1024 / 1024
-                memory_diff = memory_after - memory_before
-                logger.info(f"[MEMORY] After Sheets client init: {memory_after:.2f} MB (diff: {memory_diff:+.2f} MB)")
+            if memory_before > 0:
+                try:
+                    memory_after = process.memory_info().rss / 1024 / 1024
+                    memory_diff = memory_after - memory_before
+                    logger.info(f"[MEMORY] After Sheets client init: {memory_after:.2f} MB (diff: {memory_diff:+.2f} MB)")
+                except:
+                    pass
             
             logger.info("Google Sheets client initialized successfully")
             
@@ -103,20 +109,28 @@ class LazyClientManager:
             self._ensure_token_file()
             
             # Initialize with memory monitoring
-            import psutil
-            if psutil:
+            try:
+                import psutil
                 process = psutil.Process()
                 memory_before = process.memory_info().rss / 1024 / 1024
                 logger.info(f"[MEMORY] Before Drive client init: {memory_before:.2f} MB")
+            except ImportError:
+                memory_before = 0
+            
+            # Import DriveClient only when needed to avoid loading Google API libraries
+            from drive_client import DriveClient
             
             self._drive_client = DriveClient(
                 root_folder_id=self.config.GOOGLE_DRIVE_FOLDER_ID
             )
             
-            if psutil:
-                memory_after = process.memory_info().rss / 1024 / 1024
-                memory_diff = memory_after - memory_before
-                logger.info(f"[MEMORY] After Drive client init: {memory_after:.2f} MB (diff: {memory_diff:+.2f} MB)")
+            if memory_before > 0:
+                try:
+                    memory_after = process.memory_info().rss / 1024 / 1024
+                    memory_diff = memory_after - memory_before
+                    logger.info(f"[MEMORY] After Drive client init: {memory_after:.2f} MB (diff: {memory_diff:+.2f} MB)")
+                except:
+                    pass
             
             logger.info("Google Drive client initialized successfully")
             
