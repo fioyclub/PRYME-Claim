@@ -12,6 +12,7 @@ from telegram.ext import (
     ConversationHandler, Filters
 )
 from telegram import ParseMode
+from datetime import datetime  # Added for date parsing in dayoff handlers
 
 from user_manager import UserManager
 from claims_manager import ClaimsManager
@@ -154,10 +155,33 @@ class TelegramBot:
         self.dispatcher.add_handler(register_handler)
         self.dispatcher.add_handler(claim_handler)
         
+        # Day-off ConversationHandler
+        dayoff_handler = ConversationHandler(
+            entry_points=[
+                CommandHandler('dayoff', self.start_dayoff),
+                CallbackQueryHandler(self.start_dayoff, pattern='^start_dayoff$')
+            ],
+            states={
+                DAYOFF_TYPE: [CallbackQueryHandler(self.dayoff_type, pattern='^dayoff_type_')],
+                DAYOFF_DATE: [MessageHandler(Filters.text & ~Filters.command, self.dayoff_date)],
+                DAYOFF_START_DATE: [MessageHandler(Filters.text & ~Filters.command, self.dayoff_start_date)],
+                DAYOFF_END_DATE: [MessageHandler(Filters.text & ~Filters.command, self.dayoff_end_date)],
+                DAYOFF_REASON: [MessageHandler(Filters.text & ~Filters.command, self.dayoff_reason)]
+            },
+            fallbacks=[
+                CommandHandler('cancel', self.cancel_dayoff),
+                CallbackQueryHandler(self.cancel_dayoff, pattern='^cancel$')
+            ],
+            name="dayoff",
+            persistent=False
+        )
+        self.dispatcher.add_handler(dayoff_handler)
+        
         # Basic command handlers
         self.dispatcher.add_handler(CommandHandler("start", self.handle_start_command))
         self.dispatcher.add_handler(CommandHandler("help", self.handle_help_command))
-        self.dispatcher.add_handler(CommandHandler("dayoff", self.handle_dayoff_command))
+        // Remove CommandHandler for dayoff since it's now handled by ConversationHandler
+        // self.dispatcher.add_handler(CommandHandler("dayoff", self.handle_dayoff_command))
         
         # General callback handler for non-conversation callbacks
         self.dispatcher.add_handler(CallbackQueryHandler(self.handle_general_callback))
@@ -721,26 +745,215 @@ class TelegramBot:
             logger.error(f"Error handling help command: {e}")
             self._send_error_message(update, "Failed to get help information, please try again later.")
     
-    def handle_dayoff_command(self, update: Update, context):
-        """Handle /dayoff command"""
-        try:
-            user_id = update.effective_user.id
-            
-            logger.info(f"User {user_id} initiated day-off request")
-            
-            # Start day-off request process
-            result = self.dayoff_manager.start_dayoff_request(user_id)
-            
-            update.message.reply_text(
-                result['message'],
-                reply_markup=result.get('keyboard'),
+    // Remove handle_dayoff_command since /dayoff is now entry point of ConversationHandler
+    // def handle_dayoff_command(self, update: Update, context):
+    //     """Handle /dayoff command"""
+    //     try:
+    //         user_id = update.effective_user.id
+    //         
+    //         logger.info(f"User {user_id} initiated day-off request")
+    //         
+    //         # Start day-off request process
+    //         result = self.dayoff_manager.start_dayoff_request(user_id)
+    //         
+    //         update.message.reply_text(
+    //             result['message'],
+    //             reply_markup=result.get('keyboard'),
+    //             parse_mode=ParseMode.HTML
+    //         )
+    //             
+    //     except Exception as e:
+    //         logger.error(f"Error handling dayoff command: {e}")
+    //         self._send_error_message(update, "Failed to process day-off command, please try again later.")
+    
+    # ==================== DAY-OFF CONVERSATION HANDLERS ====================
+    
+    def start_dayoff(self, update: Update, context):
+        """Start day-off conversation"""
+        user_id = update.effective_user.id
+        
+        logger.info(f"User {user_id} started day-off request")
+        
+        result = self.dayoff_manager.start_dayoff_request(user_id)
+        
+        message = result['message']
+        keyboard = result.get('keyboard')
+        
+        if update.callback_query:
+            update.callback_query.answer()
+            update.callback_query.edit_message_text(
+                message,
+                reply_markup=keyboard,
                 parse_mode=ParseMode.HTML
             )
-                
-        except Exception as e:
-            logger.error(f"Error handling dayoff command: {e}")
-            self._send_error_message(update, "Failed to process day-off command, please try again later.")
+        else:
+            update.message.reply_text(
+                message,
+                reply_markup=keyboard,
+                parse_mode=ParseMode.HTML
+            )
+        
+        if not result['success']:
+            return ConversationHandler.END
+        
+        return DAYOFF_TYPE
     
+    def dayoff_type(self, update: Update, context):
+        query = update.callback_query
+        user_id = query.from_user.id
+        type_data = query.data
+        
+        query.answer()
+        
+        dayoff_type = type_data.split('_')[-1]  # oneday or multiday
+        context.user_data['dayoff_type'] = dayoff_type
+        
+        logger.info(f"User {user_id} selected day-off type: {dayoff_type}")
+        
+        if dayoff_type == 'oneday':
+            message = "Please enter the date for your day-off (DD/MM/YYYY):"
+            next_state = DAYOFF_DATE
+        else:
+            message = "Please enter the start date (DD/MM/YYYY):"
+            next_state = DAYOFF_START_DATE
+        
+        query.edit_message_text(
+            message,
+            reply_markup=KeyboardBuilder.cancel_keyboard()
+        )
+        return next_state
+    
+    def dayoff_date(self, update: Update, context):
+        user_id = update.effective_user.id
+        date_str = update.message.text.strip()
+        
+        logger.info(f"User {user_id} provided day-off date: {date_str}")
+        
+        is_valid, error_msg = self.dayoff_manager.validate_date_format(date_str)
+        if not is_valid:
+            update.message.reply_text(
+                error_msg + "\n\nPlease enter the date again:",
+                reply_markup=KeyboardBuilder.cancel_keyboard()
+            )
+            return DAYOFF_DATE
+        
+        context.user_data['dayoff_date'] = date_str
+        
+        update.message.reply_text(
+            "Please provide the reason for your day-off:",
+            reply_markup=KeyboardBuilder.cancel_keyboard()
+        )
+        return DAYOFF_REASON
+    
+    def dayoff_start_date(self, update: Update, context):
+        user_id = update.effective_user.id
+        date_str = update.message.text.strip()
+        
+        logger.info(f"User {user_id} provided start date: {date_str}")
+        
+        is_valid, error_msg = self.dayoff_manager.validate_date_format(date_str)
+        if not is_valid:
+            update.message.reply_text(
+                error_msg + "\n\nPlease enter the start date again:",
+                reply_markup=KeyboardBuilder.cancel_keyboard()
+            )
+            return DAYOFF_START_DATE
+        
+        context.user_data['start_date'] = date_str
+        
+        update.message.reply_text(
+            "Please enter the end date (DD/MM/YYYY):",
+            reply_markup=KeyboardBuilder.cancel_keyboard()
+        )
+        return DAYOFF_END_DATE
+    
+    def dayoff_end_date(self, update: Update, context):
+        user_id = update.effective_user.id
+        end_date = update.message.text.strip()
+        start_date = context.user_data.get('start_date')
+        
+        logger.info(f"User {user_id} provided end date: {end_date}")
+        
+        is_valid, error_msg = self.dayoff_manager.validate_date_format(end_date)
+        if not is_valid:
+            update.message.reply_text(
+                error_msg + "\n\nPlease enter the end date again:",
+                reply_markup=KeyboardBuilder.cancel_keyboard()
+            )
+            return DAYOFF_END_DATE
+        
+        # Check if end date after start date
+        start_dt = datetime.strptime(start_date, '%d/%m/%Y')
+        end_dt = datetime.strptime(end_date, '%d/%m/%Y')
+        if end_dt <= start_dt:
+            update.message.reply_text(
+                "End date must be after start date.\n\nPlease enter the end date again:",
+                reply_markup=KeyboardBuilder.cancel_keyboard()
+            )
+            return DAYOFF_END_DATE
+        
+        context.user_data['dayoff_date'] = f"{start_date} - {end_date}"
+        
+        update.message.reply_text(
+            "Please provide the reason for your day-off:",
+            reply_markup=KeyboardBuilder.cancel_keyboard()
+        )
+        return DAYOFF_REASON
+    
+    def dayoff_reason(self, update: Update, context):
+        user_id = update.effective_user.id
+        reason = update.message.text.strip()
+        
+        logger.info(f"User {user_id} provided reason: {reason[:20]}...")
+        
+        is_valid, error_msg = self.dayoff_manager.validate_reason(reason)
+        if not is_valid:
+            update.message.reply_text(
+                error_msg + "\n\nPlease enter the reason again:",
+                reply_markup=KeyboardBuilder.cancel_keyboard()
+            )
+            return DAYOFF_REASON
+        
+        dayoff_type = context.user_data.get('dayoff_type')
+        dayoff_date = context.user_data.get('dayoff_date')
+        
+        success = self.dayoff_manager.save_dayoff_request(user_id, dayoff_type, dayoff_date, reason)
+        
+        if success:
+            message = "✅ Day-off request submitted successfully!\n\nYour request is pending review."
+        else:
+            message = "❌ Failed to submit day-off request. Please try again later."
+        
+        update.message.reply_text(
+            message,
+            reply_markup=KeyboardBuilder.universal_start_keyboard()
+        )
+        
+        context.user_data.clear()
+        return ConversationHandler.END
+    
+    def cancel_dayoff(self, update: Update, context):
+        """Cancel day-off conversation"""
+        user_id = update.effective_user.id
+        logger.info(f"User {user_id} cancelled day-off request")
+        
+        message = "❌ Day-off request cancelled. You can start again with /dayoff"
+        
+        if update.callback_query:
+            update.callback_query.answer()
+            update.callback_query.edit_message_text(
+                message,
+                reply_markup=KeyboardBuilder.universal_start_keyboard()
+            )
+        else:
+            update.message.reply_text(
+                message,
+                reply_markup=KeyboardBuilder.universal_start_keyboard()
+            )
+        
+        context.user_data.clear()
+        return ConversationHandler.END
+
     def handle_general_callback(self, update: Update, context):
         """Handle general callbacks not handled by ConversationHandler"""
         query = update.callback_query
@@ -750,15 +963,7 @@ class TelegramBot:
         
         logger.info(f"General callback: {callback_data}")
         
-        if callback_data == 'start_dayoff':
-            # Handle day-off start
-            result = self.dayoff_manager.start_dayoff_request(query.from_user.id)
-            query.edit_message_text(
-                result['message'],
-                reply_markup=result.get('keyboard'),
-                parse_mode=ParseMode.HTML
-            )
-        elif callback_data == 'new_claim':
+        if callback_data == 'new_claim':
             # Start new claim
             query.edit_message_text(
                 "💰 Starting new claim process...\n\nPlease select expense category:",
