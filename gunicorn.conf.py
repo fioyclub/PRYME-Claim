@@ -11,7 +11,11 @@ bind = f"0.0.0.0:{os.environ.get('PORT', 8000)}"
 backlog = 2048
 
 # Worker processes
-workers = min(4, (multiprocessing.cpu_count() * 2) + 1)
+# Set workers to 1 to prevent ConversationHandler state loss across multiple workers
+# When using multiple workers, each worker has its own memory space and ConversationHandler state,
+# which can cause the bot to lose track of conversation state when requests are load-balanced
+# across different workers
+workers = 1
 worker_class = "sync"
 worker_connections = 1000
 timeout = 30
