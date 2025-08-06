@@ -138,7 +138,7 @@ def initialize_bot():
         from user_manager import UserManager
         from claims_manager import ClaimsManager
         from dayoff_manager import DayOffManager
-        from state_manager import StateManager
+        # StateManager removed - using ConversationHandler now
         from lazy_client_manager import get_lazy_client_manager
         
         logger.info("Initializing bot for Gunicorn deployment with lazy loading...")
