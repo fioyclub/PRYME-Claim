@@ -1,22 +1,24 @@
 """
 Telegram Bot Handler for python-telegram-bot v13.15
-Handles Telegram webhook/polling and message routing with comprehensive error handling
+Handles Telegram webhook/polling and message routing with ConversationHandler
 """
 
 import logging
 import gc
 from typing import Optional
 from telegram import Update, Bot
-from telegram.ext import Updater, CommandHandler, MessageHandler, CallbackQueryHandler, Filters
+from telegram.ext import (
+    Updater, CommandHandler, MessageHandler, CallbackQueryHandler, 
+    ConversationHandler, Filters
+)
 from telegram import ParseMode
 
 from user_manager import UserManager
 from claims_manager import ClaimsManager
 from dayoff_manager import DayOffManager
-from state_manager import StateManager
-from models import UserStateType
 from keyboards import KeyboardBuilder
 from error_handler import global_error_handler, with_error_handling
+from conversation_states import *
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +34,7 @@ class TelegramBot:
     """Main Telegram Bot handler class for v13.15"""
     
     def __init__(self, token: str, user_manager: UserManager, claims_manager: ClaimsManager, 
-                 dayoff_manager: DayOffManager, state_manager: StateManager):
+                 dayoff_manager: DayOffManager):
         """
         Initialize bot with token and required managers
         
@@ -41,13 +43,11 @@ class TelegramBot:
             user_manager: User management instance
             claims_manager: Claims management instance
             dayoff_manager: Day-off management instance
-            state_manager: State management instance
         """
         self.token = token
         self.user_manager = user_manager
         self.claims_manager = claims_manager
         self.dayoff_manager = dayoff_manager
-        self.state_manager = state_manager
         self.error_handler = global_error_handler
         
         # Create updater and dispatcher (v13.15 style)
@@ -107,25 +107,67 @@ class TelegramBot:
             logger.error(f"Error in memory cleanup for {operation}: {e}")
     
     def _setup_handlers(self):
-        """Setup all message and callback handlers"""
-        # Command handlers
+        """Setup all message and callback handlers with ConversationHandler"""
+        
+        # Registration ConversationHandler
+        register_handler = ConversationHandler(
+            entry_points=[
+                CommandHandler('register', self.start_register),
+                CallbackQueryHandler(self.start_register, pattern='^register_now$')
+            ],
+            states={
+                REGISTER_NAME: [MessageHandler(Filters.text & ~Filters.command, self.register_name)],
+                REGISTER_PHONE: [MessageHandler(Filters.text & ~Filters.command, self.register_phone)],
+                REGISTER_ROLE: [CallbackQueryHandler(self.register_role, pattern='^role_')]
+            },
+            fallbacks=[
+                CommandHandler('cancel', self.cancel_register),
+                CallbackQueryHandler(self.cancel_register, pattern='^cancel$')
+            ],
+            name="registration",
+            persistent=False
+        )
+        
+        # Claim ConversationHandler
+        claim_handler = ConversationHandler(
+            entry_points=[
+                CommandHandler('claim', self.start_claim),
+                CallbackQueryHandler(self.start_claim, pattern='^start_claim$')
+            ],
+            states={
+                CLAIM_CATEGORY: [CallbackQueryHandler(self.claim_category, pattern='^category_')],
+                CLAIM_AMOUNT: [MessageHandler(Filters.text & ~Filters.command, self.claim_amount)],
+                CLAIM_OTHER_DESCRIPTION: [MessageHandler(Filters.text & ~Filters.command, self.claim_other_description)],
+                CLAIM_PHOTO: [MessageHandler(Filters.photo, self.claim_photo)],
+                CLAIM_CONFIRM: [CallbackQueryHandler(self.claim_confirm, pattern='^confirm_')]
+            },
+            fallbacks=[
+                CommandHandler('cancel', self.cancel_claim),
+                CallbackQueryHandler(self.cancel_claim, pattern='^cancel$')
+            ],
+            name="claim",
+            persistent=False
+        )
+        
+        # Add ConversationHandlers
+        self.dispatcher.add_handler(register_handler)
+        self.dispatcher.add_handler(claim_handler)
+        
+        # Basic command handlers
         self.dispatcher.add_handler(CommandHandler("start", self.handle_start_command))
-        self.dispatcher.add_handler(CommandHandler("register", self.handle_register_command))
-        self.dispatcher.add_handler(CommandHandler("claim", self.handle_claim_command))
-        self.dispatcher.add_handler(CommandHandler("dayoff", self.handle_dayoff_command))
         self.dispatcher.add_handler(CommandHandler("help", self.handle_help_command))
+        self.dispatcher.add_handler(CommandHandler("dayoff", self.handle_dayoff_command))
         
-        # Callback query handler for inline keyboards
-        self.dispatcher.add_handler(CallbackQueryHandler(self.handle_callback_query))
+        # General callback handler for non-conversation callbacks
+        self.dispatcher.add_handler(CallbackQueryHandler(self.handle_general_callback))
         
-        # Message handlers (v13.15 uses Filters with capital F)
-        self.dispatcher.add_handler(MessageHandler(Filters.text & ~Filters.command, self.handle_text_input))
-        self.dispatcher.add_handler(MessageHandler(Filters.photo, self.handle_photo_upload))
+        # Fallback message handler
+        self.dispatcher.add_handler(MessageHandler(Filters.text & ~Filters.command, self.handle_fallback_message))
         
         # Error handler
         self.dispatcher.add_error_handler(self.handle_error)
         
-        logger.info("Bot handlers setup complete")
+        logger.info("Bot handlers setup complete with ConversationHandler")
     
     def start_webhook(self, webhook_url: str, port: int = 8000):
         """
@@ -231,6 +273,399 @@ class TelegramBot:
         finally:
             # Clean up and monitor memory
             self._cleanup_and_monitor_memory("/start", [user_data, keyboard])
+    
+    # ==================== REGISTRATION CONVERSATION HANDLERS ====================
+    
+    def start_register(self, update: Update, context):
+        """Start registration conversation"""
+        user_id = update.effective_user.id
+        
+        logger.info(f"User {user_id} started registration")
+        
+        # Check if user is already registered
+        if self.user_manager.is_user_registered(user_id):
+            message = "✅ You are already registered! You can now use all bot features."
+            
+            if update.callback_query:
+                update.callback_query.answer()
+                update.callback_query.edit_message_text(
+                    message,
+                    reply_markup=KeyboardBuilder.start_claim_keyboard()
+                )
+            else:
+                update.message.reply_text(
+                    message,
+                    reply_markup=KeyboardBuilder.start_claim_keyboard()
+                )
+            return ConversationHandler.END
+        
+        # Start registration process
+        message = "📝 Welcome to PRYMEPLUS Registration!\n\nPlease enter your REAL NAME 👤:"
+        
+        if update.callback_query:
+            update.callback_query.answer()
+            update.callback_query.edit_message_text(
+                message,
+                reply_markup=KeyboardBuilder.cancel_keyboard()
+            )
+        else:
+            update.message.reply_text(
+                message,
+                reply_markup=KeyboardBuilder.cancel_keyboard()
+            )
+        
+        return REGISTER_NAME
+    
+    def register_name(self, update: Update, context):
+        """Handle name input in registration"""
+        user_id = update.effective_user.id
+        name = update.message.text.strip()
+        
+        logger.info(f"User {user_id} provided name: {name[:20]}...")
+        
+        # Validate name
+        result = self.user_manager.process_registration_step(user_id, 'name', name)
+        
+        if result['success']:
+            # Store name in context
+            context.user_data['name'] = name
+            
+            update.message.reply_text(
+                result['message'] + "\n\nPlease enter your PHONE NUMBER 📱:",
+                reply_markup=KeyboardBuilder.cancel_keyboard(),
+                parse_mode=ParseMode.HTML
+            )
+            return REGISTER_PHONE
+        else:
+            # Invalid name, ask again
+            update.message.reply_text(
+                result['message'],
+                reply_markup=KeyboardBuilder.cancel_keyboard(),
+                parse_mode=ParseMode.HTML
+            )
+            return REGISTER_NAME
+    
+    def register_phone(self, update: Update, context):
+        """Handle phone input in registration"""
+        user_id = update.effective_user.id
+        phone = update.message.text.strip()
+        
+        logger.info(f"User {user_id} provided phone: {phone[:10]}...")
+        
+        # Validate phone
+        result = self.user_manager.process_registration_step(user_id, 'phone', phone)
+        
+        if result['success']:
+            # Store phone in context
+            context.user_data['phone'] = phone
+            
+            update.message.reply_text(
+                result['message'] + "\n\nPlease select your ROLE:",
+                reply_markup=KeyboardBuilder.role_selection_keyboard(),
+                parse_mode=ParseMode.HTML
+            )
+            return REGISTER_ROLE
+        else:
+            # Invalid phone, ask again
+            update.message.reply_text(
+                result['message'],
+                reply_markup=KeyboardBuilder.cancel_keyboard(),
+                parse_mode=ParseMode.HTML
+            )
+            return REGISTER_PHONE
+    
+    def register_role(self, update: Update, context):
+        """Handle role selection in registration"""
+        query = update.callback_query
+        user_id = query.from_user.id
+        role_data = query.data
+        
+        query.answer()
+        
+        # Extract role from callback data
+        role_mapping = {
+            'role_staff': 'Staff',
+            'role_manager': 'Manager',
+            'role_ambassador': 'Ambassador'
+        }
+        
+        role = role_mapping.get(role_data)
+        if not role:
+            query.edit_message_text(
+                "❌ Invalid role selection. Please try again:",
+                reply_markup=KeyboardBuilder.role_selection_keyboard()
+            )
+            return REGISTER_ROLE
+        
+        logger.info(f"User {user_id} selected role: {role}")
+        
+        # Process role selection and complete registration
+        result = self.user_manager.process_registration_step(user_id, 'role', role)
+        
+        if result['success']:
+            # Registration completed
+            query.edit_message_text(
+                result['message'],
+                reply_markup=KeyboardBuilder.start_claim_keyboard(),
+                parse_mode=ParseMode.HTML
+            )
+            
+            # Clear context data
+            context.user_data.clear()
+            
+            return ConversationHandler.END
+        else:
+            # Registration failed
+            query.edit_message_text(
+                result['message'],
+                reply_markup=KeyboardBuilder.role_selection_keyboard(),
+                parse_mode=ParseMode.HTML
+            )
+            return REGISTER_ROLE
+    
+    def cancel_register(self, update: Update, context):
+        """Cancel registration conversation"""
+        user_id = update.effective_user.id
+        logger.info(f"User {user_id} cancelled registration")
+        
+        message = "❌ Registration cancelled. You can start again anytime with /register"
+        
+        if update.callback_query:
+            update.callback_query.answer()
+            update.callback_query.edit_message_text(
+                message,
+                reply_markup=KeyboardBuilder.register_now_keyboard()
+            )
+        else:
+            update.message.reply_text(
+                message,
+                reply_markup=KeyboardBuilder.register_now_keyboard()
+            )
+        
+        # Clear context data
+        context.user_data.clear()
+        
+        return ConversationHandler.END
+    
+    # ==================== CLAIM CONVERSATION HANDLERS ====================
+    
+    def start_claim(self, update: Update, context):
+        """Start claim conversation"""
+        user_id = update.effective_user.id
+        
+        logger.info(f"User {user_id} started claim process")
+        
+        # Check if user is registered
+        has_permission, error_msg = self.user_manager.check_user_permission(user_id)
+        
+        if not has_permission:
+            message = error_msg
+            
+            if update.callback_query:
+                update.callback_query.answer()
+                update.callback_query.edit_message_text(
+                    message,
+                    reply_markup=KeyboardBuilder.register_now_keyboard()
+                )
+            else:
+                update.message.reply_text(
+                    message,
+                    reply_markup=KeyboardBuilder.register_now_keyboard()
+                )
+            return ConversationHandler.END
+        
+        # Start claim process
+        message = "💰 Welcome to PRYMEPLUS Claim System!\n\nPlease select expense category:"
+        
+        if update.callback_query:
+            update.callback_query.answer()
+            update.callback_query.edit_message_text(
+                message,
+                reply_markup=KeyboardBuilder.claim_categories_keyboard()
+            )
+        else:
+            update.message.reply_text(
+                message,
+                reply_markup=KeyboardBuilder.claim_categories_keyboard()
+            )
+        
+        # Initialize claim data in context
+        context.user_data['claim_data'] = {}
+        
+        return CLAIM_CATEGORY
+    
+    def claim_category(self, update: Update, context):
+        """Handle category selection in claim"""
+        query = update.callback_query
+        user_id = query.from_user.id
+        category_data = query.data
+        
+        query.answer()
+        
+        logger.info(f"User {user_id} selected category: {category_data}")
+        
+        # Process category selection
+        result = self.claims_manager.process_claim_step(user_id, 'category', category_data)
+        
+        if result['success']:
+            # Store category in context
+            context.user_data['claim_data']['category'] = category_data
+            
+            query.edit_message_text(
+                result['message'],
+                reply_markup=KeyboardBuilder.cancel_keyboard()
+            )
+            return CLAIM_AMOUNT
+        else:
+            # Invalid category
+            query.edit_message_text(
+                result['message'],
+                reply_markup=KeyboardBuilder.claim_categories_keyboard()
+            )
+            return CLAIM_CATEGORY
+    
+    def claim_amount(self, update: Update, context):
+        """Handle amount input in claim"""
+        user_id = update.effective_user.id
+        amount_text = update.message.text.strip()
+        
+        logger.info(f"User {user_id} entered amount: {amount_text}")
+        
+        # Process amount input
+        result = self.claims_manager.process_claim_step(user_id, 'amount', amount_text)
+        
+        if result['success']:
+            # Store amount in context
+            context.user_data['claim_data']['amount'] = amount_text
+            
+            # Check if category is "Other" - if so, ask for description
+            category = context.user_data['claim_data'].get('category', '')
+            if 'other' in category.lower():
+                update.message.reply_text(
+                    "📝 Please enter what you are claiming for:\n\nExample: Stationery purchase, Parking fee, etc...",
+                    reply_markup=KeyboardBuilder.cancel_keyboard()
+                )
+                return CLAIM_OTHER_DESCRIPTION
+            else:
+                # Move directly to photo upload
+                update.message.reply_text(
+                    result['message'],
+                    reply_markup=KeyboardBuilder.cancel_keyboard()
+                )
+                return CLAIM_PHOTO
+        else:
+            # Invalid amount, ask again
+            update.message.reply_text(
+                result['message'],
+                reply_markup=KeyboardBuilder.cancel_keyboard()
+            )
+            return CLAIM_AMOUNT
+    
+    def claim_other_description(self, update: Update, context):
+        """Handle other category description in claim"""
+        user_id = update.effective_user.id
+        description = update.message.text.strip()
+        
+        logger.info(f"User {user_id} provided other description: {description[:30]}...")
+        
+        # Process description
+        result = self.claims_manager.process_claim_step(user_id, 'other_description', description)
+        
+        if result['success']:
+            # Store description in context
+            context.user_data['claim_data']['other_description'] = description
+            
+            update.message.reply_text(
+                result['message'],
+                reply_markup=KeyboardBuilder.cancel_keyboard(),
+                parse_mode=ParseMode.HTML
+            )
+            return CLAIM_PHOTO
+        else:
+            # Invalid description, ask again
+            update.message.reply_text(
+                result['message'],
+                reply_markup=KeyboardBuilder.cancel_keyboard()
+            )
+            return CLAIM_OTHER_DESCRIPTION
+    
+    def claim_photo(self, update: Update, context):
+        """Handle photo upload in claim"""
+        user_id = update.effective_user.id
+        
+        logger.info(f"User {user_id} uploaded photo")
+        
+        # Get photo data
+        photo = update.message.photo[-1]  # Get highest resolution
+        photo_file = photo.get_file()
+        photo_data = photo_file.download_as_bytearray()
+        
+        # Process photo upload
+        result = self.claims_manager.process_claim_step(user_id, 'photo', bytes(photo_data))
+        
+        if result['success']:
+            # Store photo info in context
+            context.user_data['claim_data']['photo_uploaded'] = True
+            
+            update.message.reply_text(
+                result['message'],
+                reply_markup=KeyboardBuilder.confirmation_keyboard()
+            )
+            return CLAIM_CONFIRM
+        else:
+            # Invalid photo, ask again
+            update.message.reply_text(
+                result['message'],
+                reply_markup=KeyboardBuilder.cancel_keyboard()
+            )
+            return CLAIM_PHOTO
+    
+    def claim_confirm(self, update: Update, context):
+        """Handle claim confirmation"""
+        query = update.callback_query
+        user_id = query.from_user.id
+        confirm_data = query.data
+        
+        query.answer()
+        
+        logger.info(f"User {user_id} claim confirmation: {confirm_data}")
+        
+        # Process confirmation
+        result = self.claims_manager.process_claim_step(user_id, 'confirm', confirm_data)
+        
+        query.edit_message_text(
+            result['message'],
+            reply_markup=KeyboardBuilder.start_claim_keyboard() if result['success'] else KeyboardBuilder.confirmation_keyboard()
+        )
+        
+        # Clear context data
+        context.user_data.clear()
+        
+        return ConversationHandler.END
+    
+    def cancel_claim(self, update: Update, context):
+        """Cancel claim conversation"""
+        user_id = update.effective_user.id
+        logger.info(f"User {user_id} cancelled claim")
+        
+        message = "❌ Claim process cancelled. You can start again anytime with /claim"
+        
+        if update.callback_query:
+            update.callback_query.answer()
+            update.callback_query.edit_message_text(
+                message,
+                reply_markup=KeyboardBuilder.start_claim_keyboard()
+            )
+        else:
+            update.message.reply_text(
+                message,
+                reply_markup=KeyboardBuilder.start_claim_keyboard()
+            )
+        
+        # Clear context data
+        context.user_data.clear()
+        
+        return ConversationHandler.END
     
     def handle_help_command(self, update: Update, context):
         """Handle /help command"""
@@ -369,6 +804,42 @@ class TelegramBot:
         except Exception as e:
             logger.error(f"Error handling dayoff command: {e}")
             self._send_error_message(update, "Failed to process day-off command, please try again later.")
+    
+    def handle_general_callback(self, update: Update, context):
+        """Handle general callbacks not handled by ConversationHandler"""
+        query = update.callback_query
+        callback_data = query.data
+        
+        query.answer()
+        
+        logger.info(f"General callback: {callback_data}")
+        
+        if callback_data == 'start_dayoff':
+            # Handle day-off start
+            result = self.dayoff_manager.start_dayoff_request(query.from_user.id)
+            query.edit_message_text(
+                result['message'],
+                reply_markup=result.get('keyboard'),
+                parse_mode=ParseMode.HTML
+            )
+        elif callback_data == 'new_claim':
+            # Start new claim
+            query.edit_message_text(
+                "💰 Starting new claim process...\n\nPlease select expense category:",
+                reply_markup=KeyboardBuilder.claim_categories_keyboard()
+            )
+        else:
+            query.edit_message_text("Unknown operation, please use the menu buttons.")
+    
+    def handle_fallback_message(self, update: Update, context):
+        """Handle messages not in any conversation"""
+        update.message.reply_text(
+            "Please use one of the following commands:\n"
+            "• /register - Register your information\n"
+            "• /claim - Submit expense claim\n"
+            "• /help - View help information\n"
+            "• /dayoff - Request day-off"
+        )
     
     def handle_callback_query(self, update: Update, context):
         """Handle inline keyboard callbacks"""
@@ -594,13 +1065,8 @@ class TelegramBot:
         if update and update.effective_message:
             self._send_error_message(update, user_message)
         
-        # Reset user state if error is severe
-        if user_id and error_severity.value in ['high', 'critical']:
-            try:
-                self.state_manager.clear_user_state(user_id)
-                logger.info(f"Cleared state for user {user_id} due to severe error")
-            except Exception as state_error:
-                logger.error(f"Failed to clear state for user {user_id}: {state_error}")
+        # ConversationHandler will automatically handle state cleanup on errors
+        # No manual state clearing needed
     
     # Helper methods for callback handling
     
