@@ -136,13 +136,17 @@ class SheetsClient:
             # Ensure worksheet exists
             await self.create_worksheet_if_not_exists(worksheet)
             
+            # Format register date to Malaysia timezone format (DD/MM/YYYY HH:MMam/pm)
+            register_date_str = user_data.get('register_date', datetime.now().isoformat())
+            formatted_register_date = self._format_malaysia_datetime(register_date_str)
+            
             # Prepare data row
             values = [
                 user_data.get('telegram_user_id', ''),
                 user_data.get('name', ''),
                 user_data.get('phone', ''),
                 user_data.get('role', ''),
-                user_data.get('register_date', datetime.now().isoformat())
+                formatted_register_date
             ]
             
             # Run in thread pool
@@ -169,9 +173,13 @@ class SheetsClient:
             worksheet = "Claims"
             await self.create_worksheet_if_not_exists(worksheet)
             
+            # Format claim date to Malaysia timezone format (DD/MM/YYYY HH:MMam/pm)
+            claim_date_str = claim_data.get('date', datetime.now().isoformat())
+            formatted_claim_date = self._format_malaysia_datetime(claim_date_str)
+            
             # Prepare data row
             values = [
-                claim_data.get('date', datetime.now().isoformat()),
+                formatted_claim_date,
                 claim_data.get('category', ''),
                 str(claim_data.get('amount', 0)),
                 claim_data.get('receipt_link', ''),
