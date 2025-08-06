@@ -91,8 +91,8 @@ def start_bot_application(config: Config):
         # Initialize lazy client manager (no Google API clients initialized yet)
         lazy_client_manager = get_lazy_client_manager(config)
         
-        # Initialize managers with lazy loading
-        state_manager = StateManager(cleanup_interval_minutes=5)
+        # Initialize managers with lazy loading and persistent state storage
+        state_manager = StateManager(lazy_client_manager, cleanup_interval_minutes=5)
         user_manager = UserManager(lazy_client_manager, state_manager)
         claims_manager = ClaimsManager(lazy_client_manager, state_manager, config)
         dayoff_manager = DayOffManager(lazy_client_manager, state_manager, user_manager)
