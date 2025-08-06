@@ -74,18 +74,31 @@ def initialize_managers(sheets_client, drive_client, config):
         raise
 
 def start_bot_application(config: Config):
-    """Start the main bot application"""
+    """Start the main bot application with lazy loading"""
     try:
-        # Initialize Google API clients (synchronous for v13.15)
-        sheets_client, drive_client = initialize_google_clients(config)
+        from lazy_client_manager import get_lazy_client_manager
         
-        # Initialize managers (synchronous for v13.15)
-        state_manager, user_manager, claims_manager, dayoff_manager = initialize_managers(
-            sheets_client, drive_client, config
-        )
+        # Memory monitoring - start
+        try:
+            import psutil
+            process = psutil.Process()
+            memory_start = process.memory_info().rss / 1024 / 1024
+            logger.info(f"[MEMORY] Bot application start: {memory_start:.2f} MB")
+        except ImportError:
+            memory_start = 0
+            logger.warning("psutil not available, memory monitoring disabled")
+        
+        # Initialize lazy client manager (no Google API clients initialized yet)
+        lazy_client_manager = get_lazy_client_manager(config)
+        
+        # Initialize managers with lazy loading
+        state_manager = StateManager(cleanup_interval_minutes=5)
+        user_manager = UserManager(lazy_client_manager, state_manager)
+        claims_manager = ClaimsManager(lazy_client_manager, state_manager, config)
+        dayoff_manager = DayOffManager(lazy_client_manager, state_manager, user_manager)
         
         # Initialize bot handler
-        logger.info("Initializing Telegram bot handler...")
+        logger.info("Initializing Telegram bot handler with lazy loading...")
         bot = TelegramBot(
             token=config.TELEGRAM_BOT_TOKEN,
             user_manager=user_manager,
@@ -94,7 +107,16 @@ def start_bot_application(config: Config):
             state_manager=state_manager
         )
         
-        logger.info("Telegram Claim Bot initialized successfully")
+        # Memory monitoring - after bot init
+        if memory_start > 0:
+            try:
+                memory_after_bot = process.memory_info().rss / 1024 / 1024
+                bot_memory_diff = memory_after_bot - memory_start
+                logger.info(f"[MEMORY] After bot init: {memory_after_bot:.2f} MB (diff: {bot_memory_diff:+.2f} MB)")
+            except Exception as e:
+                logger.error(f"Error in memory monitoring: {e}")
+        
+        logger.info("Telegram Claim Bot initialized successfully with lazy loading")
         
         # Start the bot based on deployment mode
         if config.WEBHOOK_URL:
