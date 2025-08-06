@@ -32,16 +32,14 @@ class UserManager:
     states, and provides user authentication and permission checking.
     """
     
-    def __init__(self, lazy_client_manager, state_manager: StateManager):
+    def __init__(self, lazy_client_manager):
         """
         Initialize the UserManager with lazy loading.
         
         Args:
             lazy_client_manager: Lazy client manager for Google API clients
-            state_manager: State manager for tracking conversation states
         """
         self.lazy_client_manager = lazy_client_manager
-        self.state_manager = state_manager
         self.error_handler = global_error_handler
         
         logger.info("UserManager initialized with lazy loading")
