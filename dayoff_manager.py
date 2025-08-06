@@ -12,7 +12,7 @@ from typing import Dict, Any, Optional
 import pytz
 from models import DayOffRequest, UserStateType, UserRole
 from state_manager import StateManager
-from sheets_client import SheetsClient
+
 from user_manager import UserManager
 from keyboards import KeyboardBuilder
 from error_handler import global_error_handler
@@ -28,21 +28,21 @@ class DayOffManager:
     and stores requests in Google Sheets.
     """
     
-    def __init__(self, sheets_client: SheetsClient, state_manager: StateManager, user_manager: UserManager):
+    def __init__(self, lazy_client_manager, state_manager: StateManager, user_manager: UserManager):
         """
-        Initialize the DayOffManager.
+        Initialize the DayOffManager with lazy loading.
         
         Args:
-            sheets_client: Google Sheets client for data storage
+            lazy_client_manager: Lazy client manager for Google API clients
             state_manager: State manager for tracking conversation states
             user_manager: User manager for user data and permissions
         """
-        self.sheets_client = sheets_client
+        self.lazy_client_manager = lazy_client_manager
         self.state_manager = state_manager
         self.user_manager = user_manager
         self.error_handler = global_error_handler
         
-        logger.info("DayOffManager initialized")
+        logger.info("DayOffManager initialized with lazy loading")
     
     def start_dayoff_request(self, user_id: int) -> Dict[str, Any]:
         """
@@ -450,8 +450,10 @@ class DayOffManager:
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
             
+            # Get sheets client with lazy loading
+            sheets_client = self.lazy_client_manager.get_sheets_client()
             success = loop.run_until_complete(
-                self.sheets_client.append_dayoff_data(dayoff_data)
+                sheets_client.append_dayoff_data(dayoff_data)
             )
             
             if not success:
