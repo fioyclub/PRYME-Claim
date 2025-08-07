@@ -3,7 +3,7 @@ Google Sheets Client for Telegram Claim Bot
 Handles all Google Sheets API operations including authentication,
 worksheet management, and data operations.
 """
-import asyncio
+
 import json
 from datetime import datetime
 from typing import Dict, List, Optional, Any
@@ -58,7 +58,7 @@ class SheetsClient:
                 raise
         return self._service
     
-    async def create_worksheet_if_not_exists(self, title: str) -> bool:
+    def create_worksheet_if_not_exists(self, title: str) -> bool:
         """
         Create a worksheet if it doesn't already exist
         
@@ -69,11 +69,7 @@ class SheetsClient:
             bool: True if worksheet was created, False if it already existed
         """
         try:
-            # Run in thread pool to avoid blocking
-            loop = asyncio.get_event_loop()
-            return await loop.run_in_executor(
-                None, self._create_worksheet_sync, title
-            )
+            return self._create_worksheet_sync(title)
         except Exception as e:
             logger.error(f"Failed to create worksheet {title}: {e}")
             raise
@@ -121,7 +117,7 @@ class SheetsClient:
             logger.error(f"Unexpected error creating worksheet {title}: {e}")
             raise    
     
-    async def append_registration_data(self, worksheet: str, user_data: Dict[str, Any]) -> bool:
+    def append_registration_data(self, worksheet: str, user_data: Dict[str, Any]) -> bool:
         """
         Append user registration data to specified worksheet
         
@@ -134,7 +130,7 @@ class SheetsClient:
         """
         try:
             # Ensure worksheet exists
-            await self.create_worksheet_if_not_exists(worksheet)
+            self.create_worksheet_if_not_exists(worksheet)
             
             # Format register date to Malaysia timezone format (DD/MM/YYYY HH:MMam/pm)
             register_date_str = user_data.get('register_date', datetime.now().isoformat())
@@ -149,17 +145,13 @@ class SheetsClient:
                 formatted_register_date
             ]
             
-            # Run in thread pool
-            loop = asyncio.get_event_loop()
-            return await loop.run_in_executor(
-                None, self._append_data_sync, worksheet, [values], 'A:E'
-            )
+            return self._append_data_sync(worksheet, [values], 'A:E')
             
         except Exception as e:
             logger.error(f"Failed to append registration data: {e}")
             raise
     
-    async def append_claim_data(self, claim_data: Dict[str, Any]) -> bool:
+    def append_claim_data(self, claim_data: Dict[str, Any]) -> bool:
         """
         Append claim data to Claims worksheet
         
@@ -171,7 +163,7 @@ class SheetsClient:
         """
         try:
             worksheet = "Claims"
-            await self.create_worksheet_if_not_exists(worksheet)
+            self.create_worksheet_if_not_exists(worksheet)
             
             # Format claim date to Malaysia timezone format (DD/MM/YYYY HH:MMam/pm)
             claim_date_str = claim_data.get('date', datetime.now().isoformat())
@@ -187,17 +179,13 @@ class SheetsClient:
                 claim_data.get('status', 'Pending')
             ]
             
-            # Run in thread pool
-            loop = asyncio.get_event_loop()
-            return await loop.run_in_executor(
-                None, self._append_data_sync, worksheet, [values], 'A:F'
-            )
+            return self._append_data_sync(worksheet, [values], 'A:F')
             
         except Exception as e:
             logger.error(f"Failed to append claim data: {e}")
             raise
     
-    async def append_dayoff_data(self, dayoff_data: Dict[str, Any]) -> bool:
+    def append_dayoff_data(self, dayoff_data: Dict[str, Any]) -> bool:
         """
         Append day-off request data to Request Day-off worksheet
         
@@ -209,7 +197,7 @@ class SheetsClient:
         """
         try:
             worksheet = "Request Day-off"
-            await self.create_worksheet_if_not_exists(worksheet)
+            self.create_worksheet_if_not_exists(worksheet)
             
             # Format request date to Malaysia timezone format (DD/MM/YYYY HH:MMam/pm)
             request_date_str = dayoff_data.get('request_date', datetime.now().isoformat())
@@ -224,11 +212,7 @@ class SheetsClient:
                 dayoff_data.get('status', 'Pending')
             ]
             
-            # Run in thread pool
-            loop = asyncio.get_event_loop()
-            return await loop.run_in_executor(
-                None, self._append_data_sync, worksheet, [values], 'A:E'
-            )
+            return self._append_data_sync(worksheet, [values], 'A:E')
             
         except Exception as e:
             logger.error(f"Failed to append day-off data: {e}")
@@ -397,7 +381,7 @@ class SheetsClient:
             logger.error(f"Unexpected error ensuring headers for {worksheet}: {e}")
             raise 
    
-    async def get_user_by_telegram_id(self, user_id: int) -> Optional[Dict[str, Any]]:
+    def get_user_by_telegram_id(self, user_id: int) -> Optional[Dict[str, Any]]:
         """
         Get user data by Telegram user ID from all registration worksheets
         
@@ -408,10 +392,7 @@ class SheetsClient:
             Dict containing user data if found, None otherwise
         """
         try:
-            loop = asyncio.get_event_loop()
-            return await loop.run_in_executor(
-                None, self._get_user_sync, user_id
-            )
+            return self._get_user_sync(user_id)
         except Exception as e:
             logger.error(f"Failed to get user {user_id}: {e}")
             raise
@@ -512,7 +493,7 @@ class SheetsClient:
     
     
     
-    async def validate_spreadsheet_access(self) -> bool:
+    def validate_spreadsheet_access(self) -> bool:
         """
         Validate that the client can access the spreadsheet
         
@@ -520,10 +501,7 @@ class SheetsClient:
             bool: True if spreadsheet is accessible
         """
         try:
-            loop = asyncio.get_event_loop()
-            return await loop.run_in_executor(
-                None, self._validate_access_sync
-            )
+            return self._validate_access_sync()
         except Exception as e:
             logger.error(f"Failed to validate spreadsheet access: {e}")
             return False
@@ -546,7 +524,7 @@ class SheetsClient:
             logger.error(f"Unexpected error validating access: {e}")
             return False
     
-    async def get_all_claims(self, limit: Optional[int] = None) -> List[Dict[str, Any]]:
+    def get_all_claims(self, limit: Optional[int] = None) -> List[Dict[str, Any]]:
         """
         Get all claims from Claims worksheet
         
@@ -557,10 +535,7 @@ class SheetsClient:
             List of claim dictionaries
         """
         try:
-            loop = asyncio.get_event_loop()
-            return await loop.run_in_executor(
-                None, self._get_claims_sync, limit
-            )
+            return self._get_claims_sync(limit)
         except Exception as e:
             logger.error(f"Failed to get claims: {e}")
             raise
@@ -606,7 +581,7 @@ class SheetsClient:
             logger.error(f"Unexpected error getting claims: {e}")
             raise
     
-    async def get_all_users_in_role(self, role: str) -> List[Dict[str, Any]]:
+    def get_all_users_in_role(self, role: str) -> List[Dict[str, Any]]:
         """
         Get all users registered with a specific role
         
@@ -617,10 +592,7 @@ class SheetsClient:
             List of user data dictionaries
         """
         try:
-            loop = asyncio.get_event_loop()
-            return await loop.run_in_executor(
-                None, self._get_all_users_in_role_sync, role
-            )
+            return self._get_all_users_in_role_sync(role)
         except Exception as e:
             logger.error(f"Failed to get users with role {role}: {e}")
             raise
@@ -674,7 +646,7 @@ class SheetsClient:
             logger.error(f"Unexpected error getting users with role {role}: {e}")
             raise
 
-    async def get_user_claims(self, user_id: int, user_name: str) -> List[Dict[str, Any]]:
+    def get_user_claims(self, user_id: int, user_name: str) -> List[Dict[str, Any]]:
         """
         Get all claims submitted by a specific user
         
@@ -686,10 +658,7 @@ class SheetsClient:
             List of claim data dictionaries
         """
         try:
-            loop = asyncio.get_event_loop()
-            return await loop.run_in_executor(
-                None, self._get_user_claims_sync, user_id, user_name
-            )
+            return self._get_user_claims_sync(user_id, user_name)
         except Exception as e:
             logger.error(f"Failed to get claims for user {user_id}: {e}")
             return []
