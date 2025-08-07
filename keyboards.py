@@ -31,6 +31,27 @@ class KeyboardBuilder:
         return InlineKeyboardMarkup(keyboard)
 
     @staticmethod
+    def build_role_selection_keyboard(callback_prefix: str = "", include_cancel: bool = False) -> InlineKeyboardMarkup:
+        """
+        Create customizable role selection keyboard with optional prefix and cancel button.
+        
+        Args:
+            callback_prefix: Prefix for callback data
+            include_cancel: Whether to include cancel button
+        
+        Returns:
+            InlineKeyboardMarkup: Customized role selection keyboard
+        """
+        keyboard = [
+            [InlineKeyboardButton("Staff", callback_data=f"{callback_prefix}staff")],
+            [InlineKeyboardButton("Manager", callback_data=f"{callback_prefix}manager")],
+            [InlineKeyboardButton("Ambassador", callback_data=f"{callback_prefix}ambassador")]
+        ]
+        if include_cancel:
+            keyboard.append([InlineKeyboardButton("取消", callback_data="cancel")])
+        return InlineKeyboardMarkup(keyboard)
+
+    @staticmethod
     def claim_categories_keyboard() -> InlineKeyboardMarkup:
         """
         Create inline keyboard for expense claim category selection.
