@@ -431,18 +431,18 @@ def get_total_handler(client_manager: LazyClientManager) -> ConversationHandler:
     admin_commands = AdminCommands(client_manager)
     
     return ConversationHandler(
-        entry_points=[CommandHandler("Total", admin_commands.total_command)],
+        entry_points=[CommandHandler("Total", admin_commands.sync_total_command)],
         states={
             SELECT_ROLE: [
-                CallbackQueryHandler(admin_commands.select_role_callback, pattern=f"^{ROLE_PREFIX}"),
+                CallbackQueryHandler(admin_commands.sync_select_role_callback, pattern=f"^{ROLE_PREFIX}"),
                 CallbackQueryHandler(lambda u, c: ConversationHandler.END, pattern="^cancel$")
             ],
             SELECT_USER: [
-                CallbackQueryHandler(admin_commands.select_user_callback, pattern=f"^{USER_PREFIX}"),
+                CallbackQueryHandler(admin_commands.sync_select_user_callback, pattern=f"^{USER_PREFIX}"),
                 CallbackQueryHandler(lambda u, c: ConversationHandler.END, pattern="^cancel$")
             ],
             CONFIRM_DELETE: [
-                CallbackQueryHandler(admin_commands.confirm_delete_callback, pattern=f"^{CONFIRM_PREFIX}")
+                CallbackQueryHandler(admin_commands.sync_confirm_delete_callback, pattern=f"^{CONFIRM_PREFIX}")
             ]
         },
         fallbacks=[CommandHandler("cancel", lambda u, c: ConversationHandler.END)],
@@ -455,14 +455,14 @@ def get_deleted_handler(client_manager: LazyClientManager) -> ConversationHandle
     admin_commands = AdminCommands(client_manager)
     
     return ConversationHandler(
-        entry_points=[CommandHandler("Deleted", admin_commands.deleted_command)],
+        entry_points=[CommandHandler("Deleted", admin_commands.sync_deleted_command)],
         states={
             SELECT_ROLE: [
-                CallbackQueryHandler(admin_commands.deleted_select_role_callback, pattern=f"^{DELETED_ROLE_PREFIX}"),
+                CallbackQueryHandler(admin_commands.sync_deleted_select_role_callback, pattern=f"^{DELETED_ROLE_PREFIX}"),
                 CallbackQueryHandler(lambda u, c: ConversationHandler.END, pattern="^cancel$")
             ],
             SELECT_USER: [
-                CallbackQueryHandler(admin_commands.deleted_select_user_callback, pattern=f"^{DELETED_USER_PREFIX}"),
+                CallbackQueryHandler(admin_commands.sync_deleted_select_user_callback, pattern=f"^{DELETED_USER_PREFIX}"),
                 CallbackQueryHandler(lambda u, c: ConversationHandler.END, pattern="^cancel$")
             ]
         },
