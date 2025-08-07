@@ -39,9 +39,9 @@ class AdminCommands:
         """获取DriveClient实例"""
         return await self.client_manager.get_drive_client()
     
-    async def _check_admin(self, update: Update) -> bool:
+    def _check_admin(self, user_id: int) -> bool:
         """检查用户是否为管理员"""
-        user_id = update.effective_user.id
+        logger.info(f'Checking admin for user_id: {user_id}, ADMIN_IDS: {self.config.ADMIN_IDS}')
         return user_id in self.config.ADMIN_IDS
     
     async def total_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
