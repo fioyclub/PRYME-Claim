@@ -35,7 +35,7 @@ class TelegramBot:
     """Main Telegram Bot handler class for v13.15 with ConversationHandler"""
     
     def __init__(self, token: str, user_manager: UserManager, claims_manager: ClaimsManager, 
-                 dayoff_manager: DayOffManager):
+                 dayoff_manager: DayOffManager, admin_commands=None):
         """
         Initialize bot with token and required managers
         
@@ -44,11 +44,13 @@ class TelegramBot:
             user_manager: User management instance
             claims_manager: Claims management instance
             dayoff_manager: Day-off management instance
+            admin_commands: Admin commands handler instance
         """
         self.token = token
         self.user_manager = user_manager
         self.claims_manager = claims_manager
         self.dayoff_manager = dayoff_manager
+        self.admin_commands = admin_commands
         self.error_handler = global_error_handler
         
         # Create updater and dispatcher (v13.15 style)
@@ -176,6 +178,37 @@ class TelegramBot:
             persistent=False
         )
         self.dispatcher.add_handler(dayoff_handler)
+        
+        # Admin commands handlers
+        if self.admin_commands:
+            # Total command handler
+            total_handler = ConversationHandler(
+                entry_points=[CommandHandler('total', self.admin_commands.total_command)],
+                states={
+                    SELECT_ROLE: [CallbackQueryHandler(self.admin_commands.select_role_callback, pattern='^total_role:')],
+                    SELECT_USER: [CallbackQueryHandler(self.admin_commands.select_user_callback, pattern='^total_user:')],
+                    CONFIRM_DELETE: [CallbackQueryHandler(self.admin_commands.confirm_delete_callback, pattern='^total_confirm:')]
+                },
+                fallbacks=[CallbackQueryHandler(lambda u, c: ConversationHandler.END, pattern='^cancel$')],
+                name="admin_total",
+                persistent=False
+            )
+            
+            # Deleted command handler
+            deleted_handler = ConversationHandler(
+                entry_points=[CommandHandler('deleted', self.admin_commands.deleted_command)],
+                states={
+                    SELECT_ROLE: [CallbackQueryHandler(self.admin_commands.deleted_select_role_callback, pattern='^deleted_role:')],
+                    SELECT_USER: [CallbackQueryHandler(self.admin_commands.deleted_select_user_callback, pattern='^deleted_user:')]
+                },
+                fallbacks=[CallbackQueryHandler(lambda u, c: ConversationHandler.END, pattern='^cancel$')],
+                name="admin_deleted",
+                persistent=False
+            )
+            
+            self.dispatcher.add_handler(total_handler)
+            self.dispatcher.add_handler(deleted_handler)
+            logger.info("Admin command handlers added")
         
         # Basic command handlers
         self.dispatcher.add_handler(CommandHandler("start", self.handle_start_command))
