@@ -156,6 +156,9 @@ def initialize_bot():
         # Load configuration
         config = Config()
         
+        # Import AdminCommands and pass it to TelegramBot
+        from admin_commands import AdminCommands
+        
         # Initialize lazy client manager (no Google API clients initialized yet)
         lazy_client_manager = get_lazy_client_manager(config)
         
@@ -164,12 +167,16 @@ def initialize_bot():
         claims_manager = ClaimsManager(lazy_client_manager, config)
         dayoff_manager = DayOffManager(lazy_client_manager, user_manager)
         
+        # Initialize AdminCommands
+        admin_commands = AdminCommands(lazy_client_manager)
+        
         # Initialize bot handler
         bot_instance = TelegramBot(
             token=config.TELEGRAM_BOT_TOKEN,
             user_manager=user_manager,
             claims_manager=claims_manager,
-            dayoff_manager=dayoff_manager
+            dayoff_manager=dayoff_manager,
+            admin_commands=admin_commands
         )
         
         # Note: ConversationHandler state is maintained in-memory and is not shared between workers
