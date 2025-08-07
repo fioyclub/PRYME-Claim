@@ -287,6 +287,11 @@ class TelegramBot:
             # Log that we're using zero-API approach for /start
             logger.info(f"User {user_id} ({telegram_name}) accessed /start - zero Google API calls")
             
+            # Check if user is admin
+            is_admin = False
+            if self.admin_commands:
+                is_admin = self.admin_commands._check_admin(user_id)
+            
             # Optimized welcome message with HTML format and emojis
             message = (
                 f"<b>🎉 Welcome to PRYME PLUS Bot!</b>\n\n"
@@ -295,10 +300,16 @@ class TelegramBot:
                 f"<b>📋 Available Commands:</b>\n"
                 f"• /register - Register your information 📝\n"
                 f"• /claim - Submit your expense claim 💰\n"
+                f"• /dayoff - Request Day-off 🗓️\n"
                 f"• /help - View help information ℹ️\n"
-                f"• /dayoff - Request Day-off 🗓️\n\n"
-                f"<b>🚀 Let's get started!</b>"
             )
+            if is_admin:
+                message += (
+                    f"<b>📋 Admin Commands:</b>\n"
+                    f"• /total - View user statistics 📊\n"
+                    f"• /deleted - Delete user data 🗑️\n"
+                )
+            message += f"\n<b>🚀 Let's get started!</b>"
             
             update.message.reply_text(
                 message,
