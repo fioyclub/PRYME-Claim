@@ -56,6 +56,7 @@ def start_bot_application(config: Config):
     """Start the main bot application with lazy loading"""
     try:
         from lazy_client_manager import get_lazy_client_manager
+        from admin_commands import AdminCommands
         
         # Memory monitoring - start
         try:
@@ -74,6 +75,7 @@ def start_bot_application(config: Config):
         user_manager = UserManager(lazy_client_manager)
         claims_manager = ClaimsManager(lazy_client_manager, config)
         dayoff_manager = DayOffManager(lazy_client_manager, user_manager)
+        admin_commands = AdminCommands(lazy_client_manager)
         
         # Initialize bot handler
         logger.info("Initializing Telegram bot handler with ConversationHandler...")
@@ -81,7 +83,8 @@ def start_bot_application(config: Config):
             token=config.TELEGRAM_BOT_TOKEN,
             user_manager=user_manager,
             claims_manager=claims_manager,
-            dayoff_manager=dayoff_manager
+            dayoff_manager=dayoff_manager,
+            admin_commands=admin_commands
         )
         
         # Memory monitoring - after bot init
