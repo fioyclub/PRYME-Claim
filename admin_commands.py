@@ -3,8 +3,8 @@ import gc
 from typing import Dict, List, Any, Optional, Tuple, Union, cast
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import (ContextTypes, ConversationHandler, CommandHandler,
-                          CallbackQueryHandler)
+from telegram.ext import (ConversationHandler, CommandHandler,
+                          CallbackQueryHandler, CallbackContext)
 
 from config import Config
 from sheets_client import SheetsClient
@@ -44,7 +44,7 @@ class AdminCommands:
         logger.info(f'Checking admin for user_id: {user_id}, ADMIN_IDS: {self.config.ADMIN_IDS}')
         return user_id in self.config.ADMIN_IDS
     
-    async def total_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    async def total_command(self, update: Update, context: CallbackContext) -> int:
         """处理/Total命令"""
         # 检查是否为管理员
         user_id = update.effective_user.id
@@ -65,7 +65,7 @@ class AdminCommands:
         
         return SELECT_ROLE
     
-    async def select_role_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    async def select_role_callback(self, update: Update, context: CallbackContext) -> int:
         """处理角色选择回调"""
         query = update.callback_query
         await query.answer()
@@ -114,7 +114,7 @@ class AdminCommands:
             await query.edit_message_text(f"获取用户列表时出错: {e}")
             return ConversationHandler.END
     
-    async def select_user_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    async def select_user_callback(self, update: Update, context: CallbackContext) -> int:
         """处理用户选择回调"""
         query = update.callback_query
         await query.answer()
@@ -179,7 +179,7 @@ class AdminCommands:
             await query.edit_message_text("无效的用户数据。")
             return ConversationHandler.END
     
-    async def confirm_delete_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    async def confirm_delete_callback(self, update: Update, context: CallbackContext) -> int:
         """处理确认删除回调"""
         query = update.callback_query
         await query.answer()
@@ -264,7 +264,7 @@ class AdminCommands:
         gc.collect()
         return ConversationHandler.END
     
-    async def deleted_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    async def deleted_command(self, update: Update, context: CallbackContext) -> int:
         """处理/Deleted命令"""
         # 检查是否为管理员
         user_id = update.effective_user.id
@@ -285,7 +285,7 @@ class AdminCommands:
         
         return SELECT_ROLE
     
-    async def deleted_select_role_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    async def deleted_select_role_callback(self, update: Update, context: CallbackContext) -> int:
         """处理/Deleted命令的角色选择回调"""
         query = update.callback_query
         await query.answer()
@@ -334,7 +334,7 @@ class AdminCommands:
             await query.edit_message_text(f"获取用户列表时出错: {e}")
             return ConversationHandler.END
     
-    async def deleted_select_user_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    async def deleted_select_user_callback(self, update: Update, context: CallbackContext) -> int:
         """处理/Deleted命令的用户选择回调"""
         query = update.callback_query
         await query.answer()
