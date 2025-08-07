@@ -33,27 +33,6 @@ class AdminCommands:
         self.client_manager = client_manager
         self.config = Config()
     
-    def sync_total_command(self, update: Update, context: CallbackContext) -> int:
-        return asyncio.get_event_loop().run_until_complete(self.total_command(update, context))
-
-    def sync_select_role_callback(self, update: Update, context: CallbackContext) -> int:
-        return asyncio.get_event_loop().run_until_complete(self.select_role_callback(update, context))
-
-    def sync_select_user_callback(self, update: Update, context: CallbackContext) -> int:
-        return asyncio.get_event_loop().run_until_complete(self.select_user_callback(update, context))
-
-    def sync_confirm_delete_callback(self, update: Update, context: CallbackContext) -> int:
-        return asyncio.get_event_loop().run_until_complete(self.confirm_delete_callback(update, context))
-
-    def sync_deleted_command(self, update: Update, context: CallbackContext) -> int:
-        return asyncio.get_event_loop().run_until_complete(self.deleted_command(update, context))
-
-    def sync_deleted_select_role_callback(self, update: Update, context: CallbackContext) -> int:
-        return asyncio.get_event_loop().run_until_complete(self.deleted_select_role_callback(update, context))
-
-    def sync_deleted_select_user_callback(self, update: Update, context: CallbackContext) -> int:
-        return asyncio.get_event_loop().run_until_complete(self.deleted_select_user_callback(update, context))
-    
     async def _get_sheets_client(self) -> SheetsClient:
         """获取SheetsClient实例"""
         return await self.client_manager.get_sheets_client()
@@ -470,3 +449,51 @@ def get_deleted_handler(client_manager: LazyClientManager) -> ConversationHandle
         per_message=True,
         per_chat=True
     )
+    
+    def sync_total_command(self, update: Update, context: CallbackContext) -> int:
+        return asyncio.get_event_loop().run_until_complete(self.total_command(update, context))
+    
+    def sync_select_role_callback(self, update: Update, context: CallbackContext) -> int:
+        return asyncio.get_event_loop().run_until_complete(self.select_role_callback(update, context))
+    
+    def sync_select_user_callback(self, update: Update, context: CallbackContext) -> int:
+        return asyncio.get_event_loop().run_until_complete(self.select_user_callback(update, context))
+    
+    def sync_confirm_delete_callback(self, update: Update, context: CallbackContext) -> int:
+        return asyncio.get_event_loop().run_until_complete(self.confirm_delete_callback(update, context))
+    
+    def sync_deleted_command(self, update: Update, context: CallbackContext) -> int:
+        return asyncio.get_event_loop().run_until_complete(self.deleted_command(update, context))
+    
+    def sync_deleted_select_role_callback(self, update: Update, context: CallbackContext) -> int:
+        return asyncio.get_event_loop().run_until_complete(self.deleted_select_role_callback(update, context))
+    
+    def sync_deleted_select_user_callback(self, update: Update, context: CallbackContext) -> int:
+        return asyncio.get_event_loop().run_until_complete(self.deleted_select_user_callback(update, context))
+    
+    async def _delete_user_registration(self, user_id: int, role: str) -> bool:
+        """删除用户注册"""
+        try:
+            sheets_client = await self._get_sheets_client()
+            sheets_client.delete_user_data(user_id, role)
+            return True
+        except Exception:
+            return False
+    
+    async def _delete_user_claims(self, user_id: int, user_name: str) -> bool:
+        """删除用户报销"""
+        try:
+            sheets_client = await self._get_sheets_client()
+            sheets_client.delete_user_data(user_id, user_name)
+            return True
+        except Exception:
+            return False
+    
+    async def _delete_user_photos(self, user_id: int) -> bool:
+        """删除用户照片"""
+        try:
+            sheets_client = await self._get_sheets_client()
+            sheets_client.delete_user_data(user_id)
+            return True
+        except Exception:
+            return False
