@@ -263,8 +263,12 @@ class TelegramBot:
             logger.error(f"Failed to start polling: {e}")
             raise
     
-    def handle_start_command(self, update: Update, context):
-        """Handle /start command with optimized memory management"""
+    async def handle_start_command(self, update: Update, context: CallbackContext) -> None:
+        """Handle /start command with welcome message"""
+        user_id = update.effective_user.id
+        logger.info(f'Start command from user_id: {user_id}')
+        is_admin = self.admin_commands._check_admin(user_id) if self.admin_commands else False
+        logger.info(f'Is admin: {is_admin}')
         # Memory monitoring - start
         memory_start = self._log_memory_usage("/start", "begin")
         
