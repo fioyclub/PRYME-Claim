@@ -16,8 +16,8 @@ import asyncio
 
 logger = logging.getLogger(__name__)
 
-# 定义状态
-SELECT_ROLE, SELECT_USER, SHOW_STATS, CONFIRM_DELETE = range(4)
+# 导入状态定义
+from conversation_states import SELECT_ROLE, SELECT_USER, SHOW_STATS, CONFIRM_DELETE
 
 # 定义回调数据前缀
 ROLE_PREFIX = "total_role:"
