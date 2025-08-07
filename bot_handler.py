@@ -263,7 +263,7 @@ class TelegramBot:
             logger.error(f"Failed to start polling: {e}")
             raise
     
-    async def handle_start_command(self, update: Update, context: CallbackContext) -> None:
+    def handle_start_command(self, update: Update, context: CallbackContext) -> None:
         """Handle /start command with welcome message"""
         user_id = update.effective_user.id
         logger.info(f'Start command from user_id: {user_id}')
