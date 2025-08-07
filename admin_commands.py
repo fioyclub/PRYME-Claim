@@ -47,7 +47,8 @@ class AdminCommands:
     async def total_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         """处理/Total命令"""
         # 检查是否为管理员
-        if not await self._check_admin(update):
+        user_id = update.effective_user.id
+        if not self._check_admin(user_id):
             await update.message.reply_text("您没有权限使用此命令。")
             return ConversationHandler.END
         
@@ -266,7 +267,8 @@ class AdminCommands:
     async def deleted_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         """处理/Deleted命令"""
         # 检查是否为管理员
-        if not await self._check_admin(update):
+        user_id = update.effective_user.id
+        if not self._check_admin(user_id):
             await update.message.reply_text("您没有权限使用此命令。")
             return ConversationHandler.END
         
