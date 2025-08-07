@@ -12,6 +12,8 @@ from drive_client import DriveClient
 from lazy_client_manager import LazyClientManager
 from keyboards import KeyboardBuilder
 
+import asyncio
+
 logger = logging.getLogger(__name__)
 
 # 定义状态
@@ -30,6 +32,27 @@ class AdminCommands:
     def __init__(self, client_manager: LazyClientManager):
         self.client_manager = client_manager
         self.config = Config()
+    
+    def sync_total_command(self, update: Update, context: CallbackContext) -> int:
+        return asyncio.run(self.total_command(update, context))
+
+    def sync_select_role_callback(self, update: Update, context: CallbackContext) -> int:
+        return asyncio.run(self.select_role_callback(update, context))
+
+    def sync_select_user_callback(self, update: Update, context: CallbackContext) -> int:
+        return asyncio.run(self.select_user_callback(update, context))
+
+    def sync_confirm_delete_callback(self, update: Update, context: CallbackContext) -> int:
+        return asyncio.run(self.confirm_delete_callback(update, context))
+
+    def sync_deleted_command(self, update: Update, context: CallbackContext) -> int:
+        return asyncio.run(self.deleted_command(update, context))
+
+    def sync_deleted_select_role_callback(self, update: Update, context: CallbackContext) -> int:
+        return asyncio.run(self.deleted_select_role_callback(update, context))
+
+    def sync_deleted_select_user_callback(self, update: Update, context: CallbackContext) -> int:
+        return asyncio.run(self.deleted_select_user_callback(update, context))
     
     async def _get_sheets_client(self) -> SheetsClient:
         """获取SheetsClient实例"""
@@ -60,7 +83,7 @@ class AdminCommands:
         
         await update.message.reply_text(
             "请选择要查看的用户角色：",
-            reply_markup=InlineKeyboardMarkup(keyboard)
+            reply_markup=keyboard
         )
         
         return SELECT_ROLE
@@ -280,7 +303,7 @@ class AdminCommands:
         
         await update.message.reply_text(
             "请选择要删除的用户角色：",
-            reply_markup=InlineKeyboardMarkup(keyboard)
+            reply_markup=keyboard
         )
         
         return SELECT_ROLE
