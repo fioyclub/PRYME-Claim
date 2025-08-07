@@ -34,25 +34,25 @@ class AdminCommands:
         self.config = Config()
     
     def sync_total_command(self, update: Update, context: CallbackContext) -> int:
-        return asyncio.run(self.total_command(update, context))
+        return asyncio.get_event_loop().run_until_complete(self.total_command(update, context))
 
     def sync_select_role_callback(self, update: Update, context: CallbackContext) -> int:
-        return asyncio.run(self.select_role_callback(update, context))
+        return asyncio.get_event_loop().run_until_complete(self.select_role_callback(update, context))
 
     def sync_select_user_callback(self, update: Update, context: CallbackContext) -> int:
-        return asyncio.run(self.select_user_callback(update, context))
+        return asyncio.get_event_loop().run_until_complete(self.select_user_callback(update, context))
 
     def sync_confirm_delete_callback(self, update: Update, context: CallbackContext) -> int:
-        return asyncio.run(self.confirm_delete_callback(update, context))
+        return asyncio.get_event_loop().run_until_complete(self.confirm_delete_callback(update, context))
 
     def sync_deleted_command(self, update: Update, context: CallbackContext) -> int:
-        return asyncio.run(self.deleted_command(update, context))
+        return asyncio.get_event_loop().run_until_complete(self.deleted_command(update, context))
 
     def sync_deleted_select_role_callback(self, update: Update, context: CallbackContext) -> int:
-        return asyncio.run(self.deleted_select_role_callback(update, context))
+        return asyncio.get_event_loop().run_until_complete(self.deleted_select_role_callback(update, context))
 
     def sync_deleted_select_user_callback(self, update: Update, context: CallbackContext) -> int:
-        return asyncio.run(self.deleted_select_user_callback(update, context))
+        return asyncio.get_event_loop().run_until_complete(self.deleted_select_user_callback(update, context))
     
     async def _get_sheets_client(self) -> SheetsClient:
         """获取SheetsClient实例"""
