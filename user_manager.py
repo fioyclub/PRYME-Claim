@@ -9,7 +9,7 @@ import logging
 import gc
 import asyncio
 from datetime import datetime
-from typing import Optional, Dict, Any, Tuple
+from typing import Optional, Dict, Any, Tuple, List
 from models import UserRegistration, UserRole
 from validation import (
     validate_name, validate_phone_number, validate_telegram_user_id_legacy,
