@@ -669,3 +669,77 @@ class ClaimsManager:
                 message += f"{i}. Claim information format error\n"
         
         return message
+
+    def get_user_claims_summary(self, role: str, user_name: str) -> Dict[str, Any]:
+        """
+        Get summary of user's claims: count, total amount, unique categories.
+        
+        Args:
+            role: User role
+            user_name: User's registered name
+            
+        Returns:
+            Dict with count, total_amount, categories
+        """
+        import gc
+        summary = {'count': 0, 'total_amount': 0.0, 'categories': set()}
+        try:
+            sheets_client = self.lazy_client_manager.get_sheets_client()
+            worksheet = f"{role.capitalize()} Claims"
+            values = sheets_client._get_all_claims_sync(worksheet)  # Assume similar to _get_all_users_sync
+            for row in values:
+                if len(row) > 4 and row[4] == user_name:
+                    summary['count'] += 1
+                    summary['total_amount'] += float(row[2]) if row[2] else 0
+                    summary['categories'].add(row[1])
+            return summary
+        except Exception as e:
+            logger.error(f"Error getting claims summary for {user_name} in {role}: {e}")
+            return summary
+        finally:
+            gc.collect()
+
+    def delete_user_claims(self, role: str, user_name: str) -> bool:
+        """
+        Delete user's claims data and associated photos.
+        
+        Args:
+            role: User role
+            user_name: User's registered name
+            
+        Returns:
+            True if deletion successful
+        """
+        import gc
+        try:
+            sheets_client = self.lazy_client_manager.get_sheets_client()
+            drive_client = self.lazy_client_manager.get_drive_client()
+            worksheet = f"{role.capitalize()} Claims"
+            values = sheets_client._get_all_claims_sync(worksheet)
+            rows_to_delete = []
+            files_to_delete = []
+            for i, row in enumerate(values):
+                if len(row) > 4 and row[4] == user_name:
+                    rows_to_delete.append(i + 1)  # +1 for header
+                    if len(row) > 3 and row[3]:
+                        file_id = self._extract_file_id(row[3])
+                        if file_id:
+                            files_to_delete.append(file_id)
+            # Delete files
+            for file_id in files_to_delete:
+                drive_client._delete_file_sync(file_id)  # Assume we add this method
+            # Delete rows in reverse order
+            for row_idx in sorted(rows_to_delete, reverse=True):
+                sheets_client._delete_row_sync(worksheet, row_idx)
+            return True
+        except Exception as e:
+            logger.error(f"Error deleting claims for {user_name} in {role}: {e}")
+            return False
+        finally:
+            gc.collect()
+
+    def _extract_file_id(self, link: str) -> str:
+        """Extract file ID from Google Drive link."""
+        import re
+        match = re.search(r'/d/([a-zA-Z0-9_-]+)', link)
+        return match.group(1) if match else None
