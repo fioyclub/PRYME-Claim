@@ -54,10 +54,20 @@ class TelegramBot:
     
     def is_admin(self, user_id: int) -> bool:
         """Check if user is admin"""
-        if not self.config or not hasattr(self.config, 'ADMIN_IDS'):
-            logger.warning("No admin configuration found")
+        if not self.config:
+            logger.warning("No config object found")
             return False
-        return user_id in self.config.ADMIN_IDS
+        if not hasattr(self.config, 'ADMIN_IDS'):
+            logger.warning("No ADMIN_IDS attribute in config")
+            return False
+        if not self.config.ADMIN_IDS:
+            logger.warning(f"ADMIN_IDS is empty: {self.config.ADMIN_IDS}")
+            return False
+        
+        logger.info(f"Checking admin status for user {user_id}, ADMIN_IDS: {self.config.ADMIN_IDS}")
+        is_admin = user_id in self.config.ADMIN_IDS
+        logger.info(f"User {user_id} admin status: {is_admin}")
+        return is_admin
     
     def _log_memory_usage(self, operation: str, stage: str) -> float:
         """
