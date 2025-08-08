@@ -3,7 +3,7 @@ Google Drive Client for Telegram Claim Bot
 Handles file uploads, folder management, and shareable link generation
 for receipt photos organized by category and date.
 """
-
+import asyncio
 import json
 import io
 from datetime import datetime
@@ -88,7 +88,7 @@ class DriveClient:
             current_date = datetime.now().strftime('%Y-%m-%d')
             return f"{category}/{current_date}"
     
-    def create_folder_if_not_exists(self, folder_path: str) -> str:
+    async def create_folder_if_not_exists(self, folder_path: str) -> str:
         """
         Create folder structure if it doesn't exist
         
@@ -99,7 +99,10 @@ class DriveClient:
             str: Folder ID of the final folder
         """
         try:
-            return self._create_folder_sync(folder_path)
+            loop = asyncio.get_event_loop()
+            return await loop.run_in_executor(
+                None, self._create_folder_sync, folder_path
+            )
         except Exception as e:
             logger.error(f"Failed to create folder {folder_path}: {e}")
             raise
@@ -194,7 +197,7 @@ class DriveClient:
             logger.error(f"Error finding folder {name}: {e}")
             return None   
  
-    def upload_photo(self, photo_data: bytes, filename: str, folder_id: str) -> str:
+    async def upload_photo(self, photo_data: bytes, filename: str, folder_id: str) -> str:
         """
         Upload photo to Google Drive
         
@@ -207,7 +210,10 @@ class DriveClient:
             str: File ID of uploaded photo
         """
         try:
-            return self._upload_photo_sync(photo_data, filename, folder_id)
+            loop = asyncio.get_event_loop()
+            return await loop.run_in_executor(
+                None, self._upload_photo_sync, photo_data, filename, folder_id
+            )
         except Exception as e:
             logger.error(f"Failed to upload photo {filename}: {e}")
             raise
@@ -325,7 +331,7 @@ class DriveClient:
             # Note: Implement a background task in __init__ for timed GC
             pass  # Placeholder; actual implementation in class init
     
-    def get_shareable_link(self, file_id: str) -> str:
+    async def get_shareable_link(self, file_id: str) -> str:
         """
         Generate shareable link for a file
         
@@ -336,7 +342,10 @@ class DriveClient:
             str: Shareable link URL
         """
         try:
-            return self._get_shareable_link_sync(file_id)
+            loop = asyncio.get_event_loop()
+            return await loop.run_in_executor(
+                None, self._get_shareable_link_sync, file_id
+            )
         except Exception as e:
             logger.error(f"Failed to get shareable link for {file_id}: {e}")
             raise
@@ -374,7 +383,7 @@ class DriveClient:
             logger.error(f"Unexpected error getting shareable link for {file_id}: {e}")
             raise
     
-    def upload_receipt_with_organization(self, photo_data: bytes, category: str, 
+    async def upload_receipt_with_organization(self, photo_data: bytes, category: str, 
                                             user_id: int, timestamp: Optional[datetime] = None) -> str:
         """
         Upload receipt photo with automatic folder organization
@@ -401,21 +410,21 @@ class DriveClient:
                 folder_path = self.generate_folder_path(category, timestamp.isoformat())
                 
                 # Create folder structure
-                folder_id = self.create_folder_if_not_exists(folder_path)
+                folder_id = await self.create_folder_if_not_exists(folder_path)
                 
                 # Upload photo
-                file_id = self.upload_photo(photo_data, filename, folder_id)
+                file_id = await self.upload_photo(photo_data, filename, folder_id)
                 
             except HttpError as e:
                 if e.resp.status == 403 and 'storageQuotaExceeded' in str(e):
                     logger.warning(f"Storage quota exceeded, uploading to root folder for user {user_id}")
                     # Fallback: upload directly to root folder without organization
-                    file_id = self.upload_photo(photo_data, filename, self.root_folder_id)
+                    file_id = await self.upload_photo(photo_data, filename, self.root_folder_id)
                 else:
                     raise
             
             # Generate shareable link
-            shareable_link = self.get_shareable_link(file_id)
+            shareable_link = await self.get_shareable_link(file_id)
             
             logger.info(f"Successfully uploaded receipt for user {user_id} in category {category}")
             return shareable_link
@@ -424,7 +433,7 @@ class DriveClient:
             logger.error(f"Failed to upload receipt with organization: {e}")
             raise
     
-    def validate_drive_access(self) -> bool:
+    async def validate_drive_access(self) -> bool:
         """
         Validate that the client can access Google Drive
         
@@ -432,7 +441,10 @@ class DriveClient:
             bool: True if Drive is accessible
         """
         try:
-            return self._validate_access_sync()
+            loop = asyncio.get_event_loop()
+            return await loop.run_in_executor(
+                None, self._validate_access_sync
+            )
         except Exception as e:
             logger.error(f"Failed to validate Drive access: {e}")
             return False
@@ -466,7 +478,7 @@ class DriveClient:
             logger.error(f"Unexpected error validating Drive access: {e}")
             return False
     
-    def list_files_in_folder(self, folder_id: str, limit: int = 10) -> List[Dict[str, Any]]:
+    async def list_files_in_folder(self, folder_id: str, limit: int = 10) -> List[Dict[str, Any]]:
         """
         List files in a specific folder
         
@@ -478,7 +490,10 @@ class DriveClient:
             List of file information dictionaries
         """
         try:
-            return self._list_files_sync(folder_id, limit)
+            loop = asyncio.get_event_loop()
+            return await loop.run_in_executor(
+                None, self._list_files_sync, folder_id, limit
+            )
         except Exception as e:
             logger.error(f"Failed to list files in folder {folder_id}: {e}")
             raise
@@ -505,97 +520,3 @@ class DriveClient:
         except Exception as e:
             logger.error(f"Unexpected error listing files in folder {folder_id}: {e}")
             raise
-
-def delete_file(self, file_id: str) -> bool:
-    """
-    Delete a file from Google Drive
-    
-    Args:
-        file_id: Google Drive file ID
-        
-    Returns:
-        bool: True if successfully deleted
-    """
-    try:
-        return self._delete_file_sync(file_id)
-    except Exception as e:
-        logger.error(f"Failed to delete file {file_id}: {e}")
-        return False
-
-def _delete_file_sync(self, file_id: str) -> bool:
-    """Synchronous file deletion"""
-    service = self._get_service()
-    try:
-        service.files().delete(fileId=file_id).execute()
-        logger.info(f"Deleted file {file_id}")
-        return True
-    except HttpError as e:
-        logger.error(f"HTTP error deleting file {file_id}: {e}")
-        return False
-    except Exception as e:
-        logger.error(f"Unexpected error deleting file {file_id}: {e}")
-        return False
-
-def delete_user_files(self, user_id: int) -> Dict[str, Any]:
-    """
-    Delete all files associated with a specific user ID
-    
-    Args:
-        user_id: Telegram user ID
-        
-    Returns:
-        Dict with count of deleted files and any errors
-    """
-    try:
-        return self._delete_user_files_sync(user_id)
-    except Exception as e:
-        logger.error(f"Failed to delete files for user {user_id}: {e}")
-        return {"deleted_count": 0, "error": str(e)}
-
-def _delete_user_files_sync(self, user_id: int) -> Dict[str, Any]:
-    """Synchronous deletion of all files associated with a user"""
-    import gc
-    service = self._get_service()
-    deleted_count = 0
-    errors = []
-    
-    try:
-        # Search for files with user ID in filename
-        query = f"name contains 'receipt_{user_id}_' and trashed=false"
-        
-        # Get all matching files
-        results = service.files().list(
-            q=query,
-            fields="files(id,name)"
-        ).execute()
-        
-        files = results.get('files', [])
-        logger.info(f"Found {len(files)} files for user {user_id}")
-        
-        # Delete each file
-        for file in files:
-            try:
-                file_id = file.get('id')
-                service.files().delete(fileId=file_id).execute()
-                deleted_count += 1
-                logger.info(f"Deleted file {file.get('name')} (ID: {file_id})")
-            except Exception as file_error:
-                error_msg = f"Error deleting file {file.get('name')}: {file_error}"
-                logger.error(error_msg)
-                errors.append(error_msg)
-        
-        # Force garbage collection
-        del results, files
-        gc.collect()
-        
-        return {
-            "deleted_count": deleted_count,
-            "errors": errors if errors else None
-        }
-        
-    except HttpError as e:
-        logger.error(f"HTTP error searching for user files {user_id}: {e}")
-        return {"deleted_count": deleted_count, "error": str(e)}
-    except Exception as e:
-        logger.error(f"Unexpected error deleting user files {user_id}: {e}")
-        return {"deleted_count": deleted_count, "error": str(e)}
