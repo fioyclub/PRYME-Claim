@@ -9,7 +9,7 @@ from typing import Optional
 from telegram import Update, Bot
 from telegram.ext import (
     Updater, CommandHandler, MessageHandler, CallbackQueryHandler, 
-    ConversationHandler, Filters, CallbackContext
+    ConversationHandler, Filters
 )
 from telegram import ParseMode
 from datetime import datetime  # Added for date parsing in dayoff handlers
@@ -35,7 +35,7 @@ class TelegramBot:
     """Main Telegram Bot handler class for v13.15 with ConversationHandler"""
     
     def __init__(self, token: str, user_manager: UserManager, claims_manager: ClaimsManager, 
-                 dayoff_manager: DayOffManager, admin_commands=None):
+                 dayoff_manager: DayOffManager):
         """
         Initialize bot with token and required managers
         
@@ -44,13 +44,11 @@ class TelegramBot:
             user_manager: User management instance
             claims_manager: Claims management instance
             dayoff_manager: Day-off management instance
-            admin_commands: Admin commands handler instance
         """
         self.token = token
         self.user_manager = user_manager
         self.claims_manager = claims_manager
         self.dayoff_manager = dayoff_manager
-        self.admin_commands = admin_commands
         self.error_handler = global_error_handler
         
         # Create updater and dispatcher (v13.15 style)
@@ -179,37 +177,6 @@ class TelegramBot:
         )
         self.dispatcher.add_handler(dayoff_handler)
         
-        # Admin commands handlers
-        if self.admin_commands:
-            # Total command handler
-            total_handler = ConversationHandler(
-                entry_points=[CommandHandler('total', self.admin_commands.total_command)],
-                states={
-                    SELECT_ROLE: [CallbackQueryHandler(self.admin_commands.select_role_callback, pattern='^total_role:')],
-                    SELECT_USER: [CallbackQueryHandler(self.admin_commands.select_user_callback, pattern='^total_user:')],
-                    CONFIRM_DELETE: [CallbackQueryHandler(self.admin_commands.confirm_delete_callback, pattern='^total_confirm:')]
-                },
-                fallbacks=[CallbackQueryHandler(lambda u, c: ConversationHandler.END, pattern='^cancel$')],
-                name="admin_total",
-                persistent=False
-            )
-            
-            # Deleted command handler
-            deleted_handler = ConversationHandler(
-                entry_points=[CommandHandler('deleted', self.admin_commands.deleted_command)],
-                states={
-                    SELECT_ROLE: [CallbackQueryHandler(self.admin_commands.deleted_select_role_callback, pattern='^deleted_role:')],
-                    SELECT_USER: [CallbackQueryHandler(self.admin_commands.deleted_select_user_callback, pattern='^deleted_user:')]
-                },
-                fallbacks=[CallbackQueryHandler(lambda u, c: ConversationHandler.END, pattern='^cancel$')],
-                name="admin_deleted",
-                persistent=False
-            )
-            
-            self.dispatcher.add_handler(total_handler)
-            self.dispatcher.add_handler(deleted_handler)
-            logger.info("Admin command handlers added")
-        
         # Basic command handlers
         self.dispatcher.add_handler(CommandHandler("start", self.handle_start_command))
         self.dispatcher.add_handler(CommandHandler("help", self.handle_help_command))
@@ -263,12 +230,8 @@ class TelegramBot:
             logger.error(f"Failed to start polling: {e}")
             raise
     
-    def handle_start_command(self, update: Update, context: CallbackContext) -> None:
-        """Handle /start command with welcome message"""
-        user_id = update.effective_user.id
-        logger.info(f'Start command from user_id: {user_id}')
-        is_admin = self.admin_commands._check_admin(user_id) if self.admin_commands else False
-        logger.info(f'Is admin: {is_admin}')
+    def handle_start_command(self, update: Update, context):
+        """Handle /start command with optimized memory management"""
         # Memory monitoring - start
         memory_start = self._log_memory_usage("/start", "begin")
         
@@ -291,11 +254,6 @@ class TelegramBot:
             # Log that we're using zero-API approach for /start
             logger.info(f"User {user_id} ({telegram_name}) accessed /start - zero Google API calls")
             
-            # Check if user is admin
-            is_admin = False
-            if self.admin_commands:
-                is_admin = self.admin_commands._check_admin(user_id)
-            
             # Optimized welcome message with HTML format and emojis
             message = (
                 f"<b>🎉 Welcome to PRYME PLUS Bot!</b>\n\n"
@@ -304,16 +262,10 @@ class TelegramBot:
                 f"<b>📋 Available Commands:</b>\n"
                 f"• /register - Register your information 📝\n"
                 f"• /claim - Submit your expense claim 💰\n"
-                f"• /dayoff - Request Day-off 🗓️\n"
                 f"• /help - View help information ℹ️\n"
+                f"• /dayoff - Request Day-off 🗓️\n\n"
+                f"<b>🚀 Let's get started!</b>"
             )
-            if is_admin:
-                message += (
-                    f"<b>📋 Admin Commands:</b>\n"
-                    f"• /total - View user statistics 📊\n"
-                    f"• /deleted - Delete user data 🗑️\n"
-                )
-            message += f"\n<b>🚀 Let's get started!</b>"
             
             update.message.reply_text(
                 message,
