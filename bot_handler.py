@@ -1110,14 +1110,43 @@ class TelegramBot:
     def total_user(self, update: Update, context):
         query = update.callback_query
         user_id = int(query.data.split('_')[1])
-        claims = self.claims_manager.get_user_claims(user_id)  # Assume this method
-        total_count = len(claims)
-        total_amount = sum(claim['amount'] for claim in claims)
-        categories = set(claim['category'] for claim in claims)
-        message = f"Total claims: {total_count}\nTotal amount: {total_amount}\nCategories: {', '.join(categories)}"
-        query.edit_message_text(message, reply_markup=KeyboardBuilder.confirm_approve_keyboard())
-        context.user_data['selected_user'] = user_id
-        return TOTAL_CONFIRM
+        
+        try:
+            claims = self.claims_manager.get_user_claims(user_id)
+            total_count = len(claims)
+            total_amount = sum(claim['amount'] for claim in claims)
+            categories = set(claim['category'] for claim in claims)
+            
+            # Format the message with better display
+            if total_count > 0:
+                categories_str = ', '.join(sorted(categories)) if categories else 'None'
+                message = f"📊 **Claims Summary**\n\n"
+                message += f"👤 **User ID:** {user_id}\n"
+                message += f"📋 **Total Claims:** {total_count}\n"
+                message += f"💰 **Total Amount:** RM {total_amount:.2f}\n"
+                message += f"🏷️ **Categories:** {categories_str}\n\n"
+                
+                # Show recent claims details
+                message += "📝 **Recent Claims:**\n"
+                for i, claim in enumerate(claims[:5], 1):  # Show up to 5 recent claims
+                    message += f"{i}. {claim['category']} - RM {claim['amount']:.2f} ({claim['status']})\n"
+                
+                if total_count > 5:
+                    message += f"... and {total_count - 5} more claims\n"
+            else:
+                message = f"📊 **Claims Summary**\n\n"
+                message += f"👤 **User ID:** {user_id}\n"
+                message += f"📋 **No claims found for this user.**\n"
+            
+            query.edit_message_text(message, reply_markup=KeyboardBuilder.confirm_approve_keyboard(), parse_mode='Markdown')
+            context.user_data['selected_user'] = user_id
+            return TOTAL_CONFIRM
+            
+        except Exception as e:
+            logger.error(f"Error in total_user for user {user_id}: {e}")
+            query.edit_message_text(f"❌ Error retrieving claims data for user {user_id}. Please try again.", 
+                                  reply_markup=KeyboardBuilder.confirm_approve_keyboard())
+            return TOTAL_CONFIRM
 
     def total_confirm(self, update: Update, context):
         query = update.callback_query
