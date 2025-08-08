@@ -4,11 +4,7 @@ Handles environment variables and application settings
 """
 import os
 import json
-import logging
 from typing import Optional
-
-# Configure logger
-logger = logging.getLogger(__name__)
 
 class Config:
     """Configuration class for managing environment variables"""
@@ -32,9 +28,6 @@ class Config:
         self.RECEPTION_FOLDER_ID = self._get_required_env('RECEPTION_FOLDER_ID')
         self.TRANSPORT_FOLDER_ID = self._get_required_env('TRANSPORT_FOLDER_ID')
         
-        # Admin Configuration
-        self.ADMIN_IDS = self._parse_admin_ids(os.getenv('ADMIN_IDS', ''))
-        
         # Deployment Configuration
         self.WEBHOOK_URL = os.getenv('WEBHOOK_URL')
         self.PORT = int(os.getenv('PORT', '8000'))
@@ -55,21 +48,6 @@ class Config:
             json.loads(self.GOOGLE_TOKEN_JSON)
         except json.JSONDecodeError:
             raise ValueError("GOOGLE_TOKEN_JSON is not valid JSON")
-    
-    def _parse_admin_ids(self, admin_ids_str: str) -> list:
-        """Parse admin IDs from comma-separated string"""
-        if not admin_ids_str:
-            logger.warning("No admin IDs configured. Admin commands will not be available.")
-            return []
-        
-        try:
-            # Parse comma-separated list of admin IDs
-            admin_ids = [int(id_str.strip()) for id_str in admin_ids_str.split(',') if id_str.strip()]
-            logger.info(f"Configured {len(admin_ids)} admin IDs")
-            return admin_ids
-        except ValueError as e:
-            logger.error(f"Error parsing admin IDs: {e}. Format should be comma-separated integers.")
-            return []
     
     def get_google_token_dict(self) -> dict:
         """Get Google OAuth token as dictionary"""
