@@ -1092,7 +1092,7 @@ class TelegramBot:
         if not self.is_admin(user_id):
             update.message.reply_text("You don't have permission to use this command.")
             return ConversationHandler.END
-        update.message.reply_text("Select role type:", reply_markup=KeyboardBuilder.role_selection_keyboard(one_time_keyboard=True))
+        update.message.reply_text("Select role type:", reply_markup=KeyboardBuilder.role_selection_keyboard())
         return TOTAL_ROLE
 
     def total_role(self, update: Update, context):
@@ -1103,7 +1103,7 @@ class TelegramBot:
         if not users:
             query.edit_message_text("No users found for this role.")
             return ConversationHandler.END
-        keyboard = KeyboardBuilder.user_selection_keyboard(users, one_time_keyboard=True)
+        keyboard = KeyboardBuilder.user_selection_keyboard(users)
         query.edit_message_text("Select user:", reply_markup=keyboard)
         return TOTAL_USER
 
@@ -1115,7 +1115,7 @@ class TelegramBot:
         total_amount = sum(claim['amount'] for claim in claims)
         categories = set(claim['category'] for claim in claims)
         message = f"Total claims: {total_count}\nTotal amount: {total_amount}\nCategories: {', '.join(categories)}"
-        query.edit_message_text(message, reply_markup=KeyboardBuilder.confirm_approve_keyboard(one_time_keyboard=True))
+        query.edit_message_text(message, reply_markup=KeyboardBuilder.confirm_approve_keyboard())
         context.user_data['selected_user'] = user_id
         return TOTAL_CONFIRM
 
@@ -1144,7 +1144,7 @@ class TelegramBot:
         if not self.is_admin(user_id):
             update.message.reply_text("You don't have permission to use this command.")
             return ConversationHandler.END
-        update.message.reply_text("Select role type:", reply_markup=KeyboardBuilder.role_selection_keyboard(one_time_keyboard=True))
+        update.message.reply_text("Select role type:", reply_markup=KeyboardBuilder.role_selection_keyboard())
         return DELETED_ROLE
 
     def deleted_role(self, update: Update, context):
@@ -1155,7 +1155,7 @@ class TelegramBot:
         if not users:
             query.edit_message_text("No users found for this role.")
             return ConversationHandler.END
-        keyboard = KeyboardBuilder.user_selection_keyboard(users, one_time_keyboard=True)
+        keyboard = KeyboardBuilder.user_selection_keyboard(users)
         query.edit_message_text("Select user to delete:", reply_markup=keyboard)
         return DELETED_USER
 
