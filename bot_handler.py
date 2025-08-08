@@ -52,6 +52,13 @@ class TelegramBot:
         
         logger.info("TelegramBot initialized with ConversationHandler")
     
+    def is_admin(self, user_id: int) -> bool:
+        """Check if user is admin"""
+        if not self.config or not hasattr(self.config, 'ADMIN_IDS'):
+            logger.warning("No admin configuration found")
+            return False
+        return user_id in self.config.ADMIN_IDS
+    
     def _log_memory_usage(self, operation: str, stage: str) -> float:
         """
         Log current memory usage for monitoring
@@ -169,6 +176,39 @@ class TelegramBot:
         )
         self.dispatcher.add_handler(dayoff_handler)
         
+        # Admin Total ConversationHandler
+        total_handler = ConversationHandler(
+            entry_points=[CommandHandler('Total', self.start_total)],
+            states={
+                TOTAL_ROLE: [CallbackQueryHandler(self.total_role, pattern='^role_')],
+                TOTAL_USER: [CallbackQueryHandler(self.total_user, pattern='^user_')],
+                TOTAL_CONFIRM: [CallbackQueryHandler(self.total_confirm, pattern='^approve_')]
+            },
+            fallbacks=[
+                CommandHandler('cancel', self.cancel_total),
+                CallbackQueryHandler(self.cancel_total, pattern='^cancel$')
+            ],
+            name="total",
+            persistent=False
+        )
+        self.dispatcher.add_handler(total_handler)
+        
+        # Admin Deleted ConversationHandler
+        deleted_handler = ConversationHandler(
+            entry_points=[CommandHandler('Deleted', self.start_deleted)],
+            states={
+                DELETED_ROLE: [CallbackQueryHandler(self.deleted_role, pattern='^role_')],
+                DELETED_USER: [CallbackQueryHandler(self.deleted_user, pattern='^user_')]
+            },
+            fallbacks=[
+                CommandHandler('cancel', self.cancel_deleted),
+                CallbackQueryHandler(self.cancel_deleted, pattern='^cancel$')
+            ],
+            name="deleted",
+            persistent=False
+        )
+        self.dispatcher.add_handler(deleted_handler)
+        
         # Basic command handlers
         self.dispatcher.add_handler(CommandHandler("start", self.handle_start_command))
         self.dispatcher.add_handler(CommandHandler("help", self.handle_help_command))
@@ -246,6 +286,15 @@ class TelegramBot:
             # Log that we're using zero-API approach for /start
             logger.info(f"User {user_id} ({telegram_name}) accessed /start - zero Google API calls")
             
+            # Check if user is admin and add admin commands
+            admin_commands = ""
+            if self.is_admin(user_id):
+                admin_commands = (
+                    f"\n<b>👑 Admin Commands:</b>\n"
+                    f"• /Total - View user claims total 📊\n"
+                    f"• /Deleted - Delete user data 🗑️\n"
+                )
+            
             # Optimized welcome message with HTML format and emojis
             message = (
                 f"<b>🎉 Welcome to PRYME PLUS Bot!</b>\n\n"
@@ -255,7 +304,8 @@ class TelegramBot:
                 f"• /register - Register your information 📝\n"
                 f"• /claim - Submit your expense claim 💰\n"
                 f"• /help - View help information ℹ️\n"
-                f"• /dayoff - Request Day-off 🗓️\n\n"
+                f"• /dayoff - Request Day-off 🗓️\n"
+                f"{admin_commands}\n"
                 f"<b>🚀 Let's get started!</b>"
             )
             
