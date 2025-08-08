@@ -11,13 +11,26 @@ class Config:
     
     def __init__(self):
         """Initialize configuration from environment variables"""
+        print("[CONFIG DEBUG] Starting Config initialization...")
+        
         # Telegram Bot Configuration
         self.TELEGRAM_BOT_TOKEN = self._get_required_env('TELEGRAM_BOT_TOKEN')
+        print(f"[CONFIG DEBUG] TELEGRAM_BOT_TOKEN loaded: {bool(self.TELEGRAM_BOT_TOKEN)}")
         
         # Google API Configuration - OAuth Only
         self.GOOGLE_TOKEN_JSON = self._get_required_env('GOOGLE_TOKEN_JSON')  # OAuth token required
         self.GOOGLE_SPREADSHEET_ID = self._get_required_env('GOOGLE_SPREADSHEET_ID')
         self.GOOGLE_DRIVE_FOLDER_ID = self._get_required_env('GOOGLE_DRIVE_FOLDER_ID')
+        # Debug: Check ADMIN_IDS environment variable
+        admin_ids_env = os.getenv('ADMIN_IDS', '')
+        print(f"[CONFIG DEBUG] ADMIN_IDS env var: {repr(admin_ids_env)}")
+        
+        try:
+            self.ADMIN_IDS = [int(id.strip()) for id in admin_ids_env.split(',') if id.strip()]
+            print(f"[CONFIG DEBUG] Parsed ADMIN_IDS: {self.ADMIN_IDS}")
+        except Exception as e:
+            print(f"[CONFIG DEBUG] Error parsing ADMIN_IDS: {e}")
+            self.ADMIN_IDS = []
         
         # Category-specific Google Drive Folder IDs
         self.AI_FOLDER_ID = self._get_required_env('AI_FOLDER_ID')
@@ -34,6 +47,9 @@ class Config:
         
         # Validate Google OAuth token
         self._validate_google_token()
+        
+        print(f"[CONFIG DEBUG] Config initialization completed. ADMIN_IDS: {getattr(self, 'ADMIN_IDS', 'NOT_SET')}")
+        print(f"[CONFIG DEBUG] Config object attributes: {[attr for attr in dir(self) if not attr.startswith('_')]}")
     
     def _get_required_env(self, key: str) -> str:
         """Get required environment variable or raise error"""
