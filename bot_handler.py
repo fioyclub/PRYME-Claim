@@ -1152,11 +1152,44 @@ class TelegramBot:
         query = update.callback_query
         if query.data == 'approve_yes':
             user_id = context.user_data['selected_user']
-            self.claims_manager.delete_user_claims(user_id)  # Assume method
-            self.drive_client.delete_user_photos(user_id)  # Assume
-            query.edit_message_text("Claims approved and deleted.")
+            
+            try:
+                # Get user's role and name for deletion
+                user_role = self.claims_manager._get_user_role(user_id)
+                user_name = self.claims_manager._get_user_name(user_id)
+                
+                # Delete user's claims with correct parameters
+                claims_deleted = self.claims_manager.delete_user_claims(user_role, user_name)
+                
+                if claims_deleted:
+                    query.edit_message_text(
+                        f"✅ **Claims Approved & Deleted**\n\n"
+                        f"👤 **User:** {user_name} (ID: {user_id})\n"
+                        f"🏢 **Role:** {user_role}\n"
+                        f"📋 **Status:** All claims have been successfully deleted.",
+                        parse_mode='Markdown'
+                    )
+                    logger.info(f"Successfully deleted claims for user {user_id} ({user_name}) in role {user_role}")
+                else:
+                    query.edit_message_text(
+                        f"⚠️ **Deletion Warning**\n\n"
+                        f"👤 **User:** {user_name} (ID: {user_id})\n"
+                        f"📋 **Status:** No claims found to delete or deletion failed.",
+                        parse_mode='Markdown'
+                    )
+                    logger.warning(f"No claims found or deletion failed for user {user_id} ({user_name})")
+                    
+            except Exception as e:
+                logger.error(f"Error deleting claims for user {user_id}: {e}")
+                query.edit_message_text(
+                    f"❌ **Error**\n\n"
+                    f"Failed to delete claims for user {user_id}.\n"
+                    f"Please try again later.",
+                    parse_mode='Markdown'
+                )
         else:
-            query.edit_message_text("Operation cancelled.")
+            query.edit_message_text("🚫 **Operation Cancelled**\n\nNo changes were made.", parse_mode='Markdown')
+            
         gc.collect()
         context.user_data.clear()
         return ConversationHandler.END
