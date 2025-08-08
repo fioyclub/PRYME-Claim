@@ -605,18 +605,33 @@ class ClaimsManager:
             List of user's claims
         """
         try:
-            # Get all claims and filter by user
-            # For now, return empty list (can be enhanced later with sync method)
-            all_claims = []
+            # Get user's role to determine which worksheet to search
+            user_role = self._get_user_role(user_id)
+            user_name = self._get_user_name(user_id)
             
-            user_claims = [
-                claim for claim in all_claims 
-                if claim.get('submitted_by') == user_id
-            ]
+            # Get all claims from the role-specific Claims worksheet
+            sheets_client = self.lazy_client_manager.get_sheets_client()
+            worksheet = f"{user_role} Claims"
+            all_claims_data = sheets_client._get_all_claims_sync(worksheet)
+            
+            # Convert raw data to structured format and filter by user name
+            user_claims = []
+            for row in all_claims_data:
+                if len(row) >= 6 and row[4] == user_name:  # row[4] is submitted_by (user name)
+                    claim = {
+                        'date': row[0],
+                        'category': row[1],
+                        'amount': float(row[2]) if row[2] else 0.0,
+                        'receipt_link': row[3],
+                        'submitted_by': row[4],
+                        'status': row[5]
+                    }
+                    user_claims.append(claim)
             
             # Sort by date (most recent first) and limit
             user_claims.sort(key=lambda x: x.get('date', ''), reverse=True)
             
+            logger.info(f"Found {len(user_claims)} claims for user {user_id} ({user_name}) in {worksheet}")
             return user_claims[:limit]
             
         except Exception as e:
