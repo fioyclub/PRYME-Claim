@@ -520,3 +520,14 @@ class DriveClient:
         except Exception as e:
             logger.error(f"Unexpected error listing files in folder {folder_id}: {e}")
             raise
+
+    def _delete_file_sync(self, file_id: str) -> bool:
+        """Delete file from Google Drive."""
+        service = self._get_service()
+        try:
+            service.files().delete(fileId=file_id).execute()
+            logger.info(f"Deleted file {file_id}")
+            return True
+        except Exception as e:
+            logger.error(f"Error deleting file {file_id}: {e}")
+            return False
