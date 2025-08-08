@@ -398,12 +398,25 @@ class UserManager:
         try:
             sheets_client = self.lazy_client_manager.get_sheets_client()
             worksheet = role.capitalize()
-            result = sheets_client._get_all_users_sync(worksheet)  # Assume we add this method later
-            for row in result:
-                users.append({
-                    'telegram_user_id': int(row[0]),
-                    'name': row[1]
-                })
+            result = sheets_client._get_all_users_sync(worksheet)
+            
+            logger.info(f"Retrieved {len(result)} rows for role {role}")
+            
+            for i, row in enumerate(result):
+                try:
+                    # Check if row has enough data
+                    if len(row) >= 2 and row[0] and row[1]:
+                        users.append({
+                            'telegram_user_id': int(row[0]),
+                            'name': row[1]
+                        })
+                    else:
+                        logger.warning(f"Skipping incomplete row {i+1} in {worksheet}: {row}")
+                except (ValueError, IndexError) as e:
+                    logger.warning(f"Error processing row {i+1} in {worksheet}: {row}, error: {e}")
+                    continue
+            
+            logger.info(f"Successfully processed {len(users)} users for role {role}")
             return users
         except Exception as e:
             logger.error(f"Error getting users for role {role}: {e}")
