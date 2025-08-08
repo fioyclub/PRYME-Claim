@@ -382,3 +382,53 @@ class UserManager:
             if user_data:
                 del user_data
             gc.collect()
+
+    def get_registered_users(self, role: str) -> List[Dict[str, Any]]:
+        """
+        Get list of registered users for a specific role.
+        
+        Args:
+            role: User role (Staff, Manager, Ambassador)
+            
+        Returns:
+            List of user dictionaries
+        """
+        import gc
+        users = []
+        try:
+            sheets_client = self.lazy_client_manager.get_sheets_client()
+            worksheet = role.capitalize()
+            result = sheets_client._get_all_users_sync(worksheet)  # Assume we add this method later
+            for row in result:
+                users.append({
+                    'telegram_user_id': int(row[0]),
+                    'name': row[1]
+                })
+            return users
+        except Exception as e:
+            logger.error(f"Error getting users for role {role}: {e}")
+            return []
+        finally:
+            gc.collect()
+
+    def delete_user_registration(self, user_id: int, role: str) -> bool:
+        """
+        Delete user registration data from Google Sheets.
+        
+        Args:
+            user_id: Telegram user ID
+            role: User role
+            
+        Returns:
+            True if deletion successful
+        """
+        import gc
+        try:
+            sheets_client = self.lazy_client_manager.get_sheets_client()
+            worksheet = role.capitalize()
+            return sheets_client._delete_user_row_sync(worksheet, user_id)  # Assume we add this method later
+        except Exception as e:
+            logger.error(f"Error deleting user {user_id} from {role}: {e}")
+            return False
+        finally:
+            gc.collect()
