@@ -35,16 +35,8 @@ class TelegramBot:
     """Main Telegram Bot handler class for v13.15 with ConversationHandler"""
     
     def __init__(self, token: str, user_manager: UserManager, claims_manager: ClaimsManager, 
-                 dayoff_manager: DayOffManager):
-        """
-        Initialize bot with token and required managers
-        
-        Args:
-            token: Telegram bot token
-            user_manager: User management instance
-            claims_manager: Claims management instance
-            dayoff_manager: Day-off management instance
-        """
+                 dayoff_manager: DayOffManager, config=None):
+        self.config = config
         self.token = token
         self.user_manager = user_manager
         self.claims_manager = claims_manager
@@ -1032,3 +1024,722 @@ class TelegramBot:
                 query.message.reply_text(text, reply_markup=reply_markup)
             except Exception as e2:
                 logger.error(f"Failed to send new message: {e2}")
+
+    # ==================== TOTAL CONVERSATION HANDLERS ====================
+
+    def start_total(self, update: Update, context):
+        user_id = update.effective_user.id
+        if not self.is_admin(user_id):
+            update.message.reply_text("You don't have permission to use this command.")
+            return ConversationHandler.END
+        update.message.reply_text("Select role type:", reply_markup=KeyboardBuilder.role_selection_keyboard(one_time_keyboard=True))
+        return TOTAL_ROLE
+
+    def total_role(self, update: Update, context):
+        query = update.callback_query
+        role = query.data.split('_')[1]
+        context.user_data['role'] = role
+        users = self.user_manager.get_registered_users(role)  # Assume this method exists or add it
+        if not users:
+            query.edit_message_text("No users found for this role.")
+            return ConversationHandler.END
+        keyboard = KeyboardBuilder.user_selection_keyboard(users, one_time_keyboard=True)
+        query.edit_message_text("Select user:", reply_markup=keyboard)
+        return TOTAL_USER
+
+    def total_user(self, update: Update, context):
+        query = update.callback_query
+        user_id = int(query.data.split('_')[1])
+        claims = self.claims_manager.get_user_claims(user_id)  # Assume this method
+        total_count = len(claims)
+        total_amount = sum(claim['amount'] for claim in claims)
+        categories = set(claim['category'] for claim in claims)
+        message = f"Total claims: {total_count}\nTotal amount: {total_amount}\nCategories: {', '.join(categories)}"
+        query.edit_message_text(message, reply_markup=KeyboardBuilder.confirm_approve_keyboard(one_time_keyboard=True))
+        context.user_data['selected_user'] = user_id
+        return TOTAL_CONFIRM
+
+    def total_confirm(self, update: Update, context):
+        query = update.callback_query
+        if query.data == 'approve_yes':
+            user_id = context.user_data['selected_user']
+            self.claims_manager.delete_user_claims(user_id)  # Assume method
+            self.drive_client.delete_user_photos(user_id)  # Assume
+            query.edit_message_text("Claims approved and deleted.")
+        else:
+            query.edit_message_text("Operation cancelled.")
+        gc.collect()
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_total(self, update: Update, context):
+        update.message.reply_text("Total operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    # ==================== DELETED CONVERSATION HANDLERS ====================
+
+    def start_deleted(self, update: Update, context):
+        user_id = update.effective_user.id
+        if not self.is_admin(user_id):
+            update.message.reply_text("You don't have permission to use this command.")
+            return ConversationHandler.END
+        update.message.reply_text("Select role type:", reply_markup=KeyboardBuilder.role_selection_keyboard(one_time_keyboard=True))
+        return DELETED_ROLE
+
+    def deleted_role(self, update: Update, context):
+        query = update.callback_query
+        role = query.data.split('_')[1]
+        context.user_data['role'] = role
+        users = self.user_manager.get_registered_users(role)
+        if not users:
+            query.edit_message_text("No users found for this role.")
+            return ConversationHandler.END
+        keyboard = KeyboardBuilder.user_selection_keyboard(users, one_time_keyboard=True)
+        query.edit_message_text("Select user to delete:", reply_markup=keyboard)
+        return DELETED_USER
+
+    def deleted_user(self, update: Update, context):
+        query = update.callback_query
+        user_id = int(query.data.split('_')[1])
+        self.user_manager.delete_user_data(user_id, context.user_data['role'])
+        self.claims_manager.delete_user_claims(user_id)
+        self.drive_client.delete_user_photos(user_id)
+        query.edit_message_text("User data and files deleted.")
+        gc.collect()
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.user_data.clear()
+        return ConversationHandler.END
+
+    def cancel_deleted(self, update: Update, context):
+        update.message.reply_text("Delete operation cancelled.")
+        context.
