@@ -183,48 +183,6 @@ class KeyboardBuilder:
         return InlineKeyboardMarkup(keyboard)
 
     @staticmethod
-    def user_selection_keyboard(users: List[dict]) -> InlineKeyboardMarkup:
-        """
-        Create inline keyboard for user selection in admin commands.
-        
-        Args:
-            users: List of user dictionaries with 'telegram_user_id' and 'name' keys
-            
-        Returns:
-            InlineKeyboardMarkup: Keyboard with user selection options
-        """
-        keyboard = []
-        for user in users:
-            user_id = user.get('telegram_user_id') or user.get('id') or user.get('user_id')
-            user_name = user.get('name') or user.get('username', f"User {user_id}")
-            if user_id and user_name:
-                keyboard.append([InlineKeyboardButton(user_name, callback_data=f"user_{user_id}")])
-        
-        # Add a back button if no users found or as a general option
-        if not keyboard:
-            keyboard.append([InlineKeyboardButton("🔙 Back", callback_data="back")])
-        else:
-            keyboard.append([InlineKeyboardButton("🔙 Back", callback_data="back")])
-        
-        return InlineKeyboardMarkup(keyboard)
-
-    @staticmethod
-    def confirm_approve_keyboard() -> InlineKeyboardMarkup:
-        """
-        Create inline keyboard for admin confirmation/approval actions.
-        
-        Returns:
-            InlineKeyboardMarkup: Keyboard with approve/reject options
-        """
-        keyboard = [
-            [
-                InlineKeyboardButton("✅ Approve", callback_data="approve_yes"),
-                InlineKeyboardButton("❌ Reject", callback_data="approve_no")
-            ]
-        ]
-        return InlineKeyboardMarkup(keyboard)
-
-    @staticmethod
     def custom_keyboard(buttons: List[Tuple[str, str]], columns: int = 1) -> InlineKeyboardMarkup:
         """
         Create custom inline keyboard with specified buttons.
