@@ -9,7 +9,7 @@ import logging
 import gc
 import asyncio
 from datetime import datetime
-from typing import Optional, Dict, Any, Tuple, List
+from typing import Optional, Dict, Any, Tuple
 from models import UserRegistration, UserRole
 from validation import (
     validate_name, validate_phone_number, validate_telegram_user_id_legacy,
@@ -381,67 +381,4 @@ class UserManager:
             # Clean up user data immediately
             if user_data:
                 del user_data
-            gc.collect()
-
-    def get_registered_users(self, role: str) -> List[Dict[str, Any]]:
-        """
-        Get list of registered users for a specific role.
-        
-        Args:
-            role: User role (Staff, Manager, Ambassador)
-            
-        Returns:
-            List of user dictionaries
-        """
-        import gc
-        users = []
-        try:
-            sheets_client = self.lazy_client_manager.get_sheets_client()
-            worksheet = role.capitalize()
-            result = sheets_client._get_all_users_sync(worksheet)
-            
-            logger.info(f"Retrieved {len(result)} rows for role {role}")
-            
-            for i, row in enumerate(result):
-                try:
-                    # Check if row has enough data
-                    if len(row) >= 2 and row[0] and row[1]:
-                        users.append({
-                            'telegram_user_id': int(row[0]),
-                            'name': row[1]
-                        })
-                    else:
-                        logger.warning(f"Skipping incomplete row {i+1} in {worksheet}: {row}")
-                except (ValueError, IndexError) as e:
-                    logger.warning(f"Error processing row {i+1} in {worksheet}: {row}, error: {e}")
-                    continue
-            
-            logger.info(f"Successfully processed {len(users)} users for role {role}")
-            return users
-        except Exception as e:
-            logger.error(f"Error getting users for role {role}: {e}")
-            return []
-        finally:
-            gc.collect()
-
-    def delete_user_registration(self, user_id: int, role: str) -> bool:
-        """
-        Delete user registration data from Google Sheets.
-        
-        Args:
-            user_id: Telegram user ID
-            role: User role
-            
-        Returns:
-            True if deletion successful
-        """
-        import gc
-        try:
-            sheets_client = self.lazy_client_manager.get_sheets_client()
-            worksheet = role.capitalize()
-            return sheets_client._delete_user_row_sync(worksheet, user_id)  # Assume we add this method later
-        except Exception as e:
-            logger.error(f"Error deleting user {user_id} from {role}: {e}")
-            return False
-        finally:
             gc.collect()
