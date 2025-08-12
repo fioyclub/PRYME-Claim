@@ -35,8 +35,16 @@ class TelegramBot:
     """Main Telegram Bot handler class for v13.15 with ConversationHandler"""
     
     def __init__(self, token: str, user_manager: UserManager, claims_manager: ClaimsManager, 
-                 dayoff_manager: DayOffManager, config=None):
-        self.config = config
+                 dayoff_manager: DayOffManager):
+        """
+        Initialize bot with token and required managers
+        
+        Args:
+            token: Telegram bot token
+            user_manager: User management instance
+            claims_manager: Claims management instance
+            dayoff_manager: Day-off management instance
+        """
         self.token = token
         self.user_manager = user_manager
         self.claims_manager = claims_manager
@@ -51,23 +59,6 @@ class TelegramBot:
         self._setup_handlers()
         
         logger.info("TelegramBot initialized with ConversationHandler")
-    
-    def is_admin(self, user_id: int) -> bool:
-        """Check if user is admin"""
-        if not self.config:
-            logger.warning("No config object found")
-            return False
-        if not hasattr(self.config, 'ADMIN_IDS'):
-            logger.warning("No ADMIN_IDS attribute in config")
-            return False
-        if not self.config.ADMIN_IDS:
-            logger.warning(f"ADMIN_IDS is empty: {self.config.ADMIN_IDS}")
-            return False
-        
-        logger.info(f"Checking admin status for user {user_id}, ADMIN_IDS: {self.config.ADMIN_IDS}")
-        is_admin = user_id in self.config.ADMIN_IDS
-        logger.info(f"User {user_id} admin status: {is_admin}")
-        return is_admin
     
     def _log_memory_usage(self, operation: str, stage: str) -> float:
         """
@@ -186,39 +177,6 @@ class TelegramBot:
         )
         self.dispatcher.add_handler(dayoff_handler)
         
-        # Admin Total ConversationHandler
-        total_handler = ConversationHandler(
-            entry_points=[CommandHandler('Total', self.start_total)],
-            states={
-                TOTAL_ROLE: [CallbackQueryHandler(self.total_role, pattern='^role_')],
-                TOTAL_USER: [CallbackQueryHandler(self.total_user, pattern='^user_')],
-                TOTAL_CONFIRM: [CallbackQueryHandler(self.total_confirm, pattern='^approve_')]
-            },
-            fallbacks=[
-                CommandHandler('cancel', self.cancel_total),
-                CallbackQueryHandler(self.cancel_total, pattern='^cancel$')
-            ],
-            name="total",
-            persistent=False
-        )
-        self.dispatcher.add_handler(total_handler)
-        
-        # Admin Deleted ConversationHandler
-        deleted_handler = ConversationHandler(
-            entry_points=[CommandHandler('Deleted', self.start_deleted)],
-            states={
-                DELETED_ROLE: [CallbackQueryHandler(self.deleted_role, pattern='^role_')],
-                DELETED_USER: [CallbackQueryHandler(self.deleted_user, pattern='^user_')]
-            },
-            fallbacks=[
-                CommandHandler('cancel', self.cancel_deleted),
-                CallbackQueryHandler(self.cancel_deleted, pattern='^cancel$')
-            ],
-            name="deleted",
-            persistent=False
-        )
-        self.dispatcher.add_handler(deleted_handler)
-        
         # Basic command handlers
         self.dispatcher.add_handler(CommandHandler("start", self.handle_start_command))
         self.dispatcher.add_handler(CommandHandler("help", self.handle_help_command))
@@ -296,15 +254,6 @@ class TelegramBot:
             # Log that we're using zero-API approach for /start
             logger.info(f"User {user_id} ({telegram_name}) accessed /start - zero Google API calls")
             
-            # Check if user is admin and add admin commands
-            admin_commands = ""
-            if self.is_admin(user_id):
-                admin_commands = (
-                    f"\n<b>👑 Admin Commands:</b>\n"
-                    f"• /Total - View user claims total 📊\n"
-                    f"• /Deleted - Delete user data 🗑️\n"
-                )
-            
             # Optimized welcome message with HTML format and emojis
             message = (
                 f"<b>🎉 Welcome to PRYME PLUS Bot!</b>\n\n"
@@ -314,8 +263,7 @@ class TelegramBot:
                 f"• /register - Register your information 📝\n"
                 f"• /claim - Submit your expense claim 💰\n"
                 f"• /help - View help information ℹ️\n"
-                f"• /dayoff - Request Day-off 🗓️\n"
-                f"{admin_commands}\n"
+                f"• /dayoff - Request Day-off 🗓️\n\n"
                 f"<b>🚀 Let's get started!</b>"
             )
             
@@ -1084,155 +1032,3 @@ class TelegramBot:
                 query.message.reply_text(text, reply_markup=reply_markup)
             except Exception as e2:
                 logger.error(f"Failed to send new message: {e2}")
-
-    # ==================== TOTAL CONVERSATION HANDLERS ====================
-
-    def start_total(self, update: Update, context):
-        user_id = update.effective_user.id
-        if not self.is_admin(user_id):
-            update.message.reply_text("You don't have permission to use this command.")
-            return ConversationHandler.END
-        update.message.reply_text("Select role type:", reply_markup=KeyboardBuilder.role_selection_keyboard())
-        return TOTAL_ROLE
-
-    def total_role(self, update: Update, context):
-        query = update.callback_query
-        role = query.data.split('_')[1]
-        context.user_data['role'] = role
-        users = self.user_manager.get_registered_users(role)  # Assume this method exists or add it
-        if not users:
-            query.edit_message_text("No users found for this role.")
-            return ConversationHandler.END
-        keyboard = KeyboardBuilder.user_selection_keyboard(users)
-        query.edit_message_text("Select user:", reply_markup=keyboard)
-        return TOTAL_USER
-
-    def total_user(self, update: Update, context):
-        query = update.callback_query
-        user_id = int(query.data.split('_')[1])
-        
-        try:
-            claims = self.claims_manager.get_user_claims(user_id)
-            total_count = len(claims)
-            total_amount = sum(claim['amount'] for claim in claims)
-            categories = set(claim['category'] for claim in claims)
-            
-            # Format the message with better display
-            if total_count > 0:
-                categories_str = ', '.join(sorted(categories)) if categories else 'None'
-                message = f"📊 **Claims Summary**\n\n"
-                message += f"👤 **User ID:** {user_id}\n"
-                message += f"📋 **Total Claims:** {total_count}\n"
-                message += f"💰 **Total Amount:** RM {total_amount:.2f}\n"
-                message += f"🏷️ **Categories:** {categories_str}\n\n"
-                
-                # Show recent claims details
-                message += "📝 **Recent Claims:**\n"
-                for i, claim in enumerate(claims[:5], 1):  # Show up to 5 recent claims
-                    message += f"{i}. {claim['category']} - RM {claim['amount']:.2f} ({claim['status']})\n"
-                
-                if total_count > 5:
-                    message += f"... and {total_count - 5} more claims\n"
-            else:
-                message = f"📊 **Claims Summary**\n\n"
-                message += f"👤 **User ID:** {user_id}\n"
-                message += f"📋 **No claims found for this user.**\n"
-            
-            query.edit_message_text(message, reply_markup=KeyboardBuilder.confirm_approve_keyboard(), parse_mode='Markdown')
-            context.user_data['selected_user'] = user_id
-            return TOTAL_CONFIRM
-            
-        except Exception as e:
-            logger.error(f"Error in total_user for user {user_id}: {e}")
-            query.edit_message_text(f"❌ Error retrieving claims data for user {user_id}. Please try again.", 
-                                  reply_markup=KeyboardBuilder.confirm_approve_keyboard())
-            return TOTAL_CONFIRM
-
-    def total_confirm(self, update: Update, context):
-        query = update.callback_query
-        if query.data == 'approve_yes':
-            user_id = context.user_data['selected_user']
-            
-            try:
-                # Get user's role and name for deletion
-                user_role = self.claims_manager._get_user_role(user_id)
-                user_name = self.claims_manager._get_user_name(user_id)
-                
-                # Delete user's claims with correct parameters
-                claims_deleted = self.claims_manager.delete_user_claims(user_role, user_name)
-                
-                if claims_deleted:
-                    query.edit_message_text(
-                        f"✅ **Claims Approved & Deleted**\n\n"
-                        f"👤 **User:** {user_name} (ID: {user_id})\n"
-                        f"🏢 **Role:** {user_role}\n"
-                        f"📋 **Status:** All claims have been successfully deleted.",
-                        parse_mode='Markdown'
-                    )
-                    logger.info(f"Successfully deleted claims for user {user_id} ({user_name}) in role {user_role}")
-                else:
-                    query.edit_message_text(
-                        f"⚠️ **Deletion Warning**\n\n"
-                        f"👤 **User:** {user_name} (ID: {user_id})\n"
-                        f"📋 **Status:** No claims found to delete or deletion failed.",
-                        parse_mode='Markdown'
-                    )
-                    logger.warning(f"No claims found or deletion failed for user {user_id} ({user_name})")
-                    
-            except Exception as e:
-                logger.error(f"Error deleting claims for user {user_id}: {e}")
-                query.edit_message_text(
-                    f"❌ **Error**\n\n"
-                    f"Failed to delete claims for user {user_id}.\n"
-                    f"Please try again later.",
-                    parse_mode='Markdown'
-                )
-        else:
-            query.edit_message_text("🚫 **Operation Cancelled**\n\nNo changes were made.", parse_mode='Markdown')
-            
-        gc.collect()
-        context.user_data.clear()
-        return ConversationHandler.END
-
-    def cancel_total(self, update: Update, context):
-        update.message.reply_text("Total operation cancelled.")
-        context.user_data.clear()
-        return ConversationHandler.END
-
-    # ==================== DELETED CONVERSATION HANDLERS ====================
-
-    def start_deleted(self, update: Update, context):
-        user_id = update.effective_user.id
-        if not self.is_admin(user_id):
-            update.message.reply_text("You don't have permission to use this command.")
-            return ConversationHandler.END
-        update.message.reply_text("Select role type:", reply_markup=KeyboardBuilder.role_selection_keyboard())
-        return DELETED_ROLE
-
-    def deleted_role(self, update: Update, context):
-        query = update.callback_query
-        role = query.data.split('_')[1]
-        context.user_data['role'] = role
-        users = self.user_manager.get_registered_users(role)
-        if not users:
-            query.edit_message_text("No users found for this role.")
-            return ConversationHandler.END
-        keyboard = KeyboardBuilder.user_selection_keyboard(users)
-        query.edit_message_text("Select user to delete:", reply_markup=keyboard)
-        return DELETED_USER
-
-    def deleted_user(self, update: Update, context):
-        query = update.callback_query
-        user_id = int(query.data.split('_')[1])
-        self.user_manager.delete_user_data(user_id, context.user_data['role'])
-        self.claims_manager.delete_user_claims(user_id)
-        self.drive_client.delete_user_photos(user_id)
-        query.edit_message_text("User data and files deleted.")
-        gc.collect()
-        context.user_data.clear()
-        return ConversationHandler.END
-
-    def cancel_deleted(self, update: Update, context):
-        update.message.reply_text("Delete operation cancelled.")
-        context.user_data.clear()
-        return ConversationHandler.END
