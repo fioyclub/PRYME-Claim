@@ -107,6 +107,60 @@ class TelegramBot:
         except Exception as e:
             logger.error(f"Error in memory cleanup for {operation}: {e}")
     
+    def _send_processing_message(self, update_or_query, message_type: str, custom_message: str = None):
+        """
+        Send a processing message to provide user feedback during long operations
+        
+        Args:
+            update_or_query: Update object or CallbackQuery object
+            message_type: Type of processing ('upload', 'save', 'submit')
+            custom_message: Custom message to display (optional)
+            
+        Returns:
+            Message object for later deletion (if applicable)
+        """
+        # Default messages for different operation types
+        default_messages = {
+            'upload': "📤 <b>上传中...</b>\n\n正在处理您的收据照片，请稍候...\n⏳ <i>请不要点击其他按钮</i>",
+            'save': "💾 <b>保存中...</b>\n\n正在保存您的信息到系统...\n⏳ <i>请稍候，不要点击其他按钮</i>",
+            'submit': "📋 <b>提交中...</b>\n\n正在提交您的申请到系统...\n⏳ <i>请稍候，不要点击其他按钮</i>",
+            'dayoff_submit': "📅 <b>提交中...</b>\n\n正在提交您的请假申请到系统...\n⏳ <i>请稍候，不要点击其他按钮</i>"
+        }
+        
+        message_text = custom_message or default_messages.get(message_type, default_messages['submit'])
+        
+        try:
+            # Check if it's a CallbackQuery (inline keyboard response)
+            if hasattr(update_or_query, 'edit_message_text'):
+                # For CallbackQuery, edit the existing message
+                update_or_query.edit_message_text(
+                    message_text,
+                    parse_mode=ParseMode.HTML
+                )
+                return None  # Can't delete edited messages
+            else:
+                # For regular Update, send a new message
+                return update_or_query.message.reply_text(
+                    message_text,
+                    parse_mode=ParseMode.HTML
+                )
+        except Exception as e:
+            logger.warning(f"Could not send processing message: {e}")
+            return None
+    
+    def _delete_processing_message(self, message):
+        """
+        Safely delete a processing message
+        
+        Args:
+            message: Message object to delete
+        """
+        if message:
+            try:
+                message.delete()
+            except Exception as e:
+                logger.warning(f"Could not delete processing message: {e}")
+    
     def _setup_handlers(self):
         """Setup all message and callback handlers with ConversationHandler"""
         
@@ -423,13 +477,16 @@ class TelegramBot:
             context.user_data.clear()
             return ConversationHandler.END
         
+        # Show "saving" message to provide user feedback
+        self._send_processing_message(query, 'save')
+        
         # Save registration to Google Sheets
         success = self.user_manager.save_registration(user_id, name, phone, role)
         
         if success:
             # Registration completed successfully
             query.edit_message_text(
-                f"✅ Registration completed successfully!\n\n"
+                f"✅ <b>Registration completed successfully!</b>\n\n"
                 f"👤 Name: {name}\n"
                 f"📱 Phone: {phone}\n"
                 f"🏢 Role: {role}\n\n"
@@ -626,30 +683,50 @@ class TelegramBot:
         
         logger.info(f"User {user_id} uploaded photo")
         
-        # Get photo data
-        photo = update.message.photo[-1]  # Get highest resolution
-        photo_file = photo.get_file()
-        photo_data = photo_file.download_as_bytearray()
+        # Send immediate "uploading" message to provide user feedback
+        uploading_message = self._send_processing_message(update, 'upload')
         
-        # Get claim data from context
-        claim_data = context.user_data.get('claim_data', {})
-        
-        # Process photo upload
-        result = self.claims_manager._process_photo_upload(user_id, bytes(photo_data), claim_data)
-        
-        if result['success']:
-            # Store receipt link in context
-            context.user_data['claim_data']['receipt_link'] = result.get('receipt_link')
+        try:
+            # Get photo data
+            photo = update.message.photo[-1]  # Get highest resolution
+            photo_file = photo.get_file()
+            photo_data = photo_file.download_as_bytearray()
             
+            # Get claim data from context
+            claim_data = context.user_data.get('claim_data', {})
+            
+            # Process photo upload
+            result = self.claims_manager._process_photo_upload(user_id, bytes(photo_data), claim_data)
+            
+            # Delete the "uploading" message
+            self._delete_processing_message(uploading_message)
+            
+            if result['success']:
+                # Store receipt link in context
+                context.user_data['claim_data']['receipt_link'] = result.get('receipt_link')
+                
+                update.message.reply_text(
+                    result['message'],
+                    reply_markup=KeyboardBuilder.confirmation_keyboard(),
+                    parse_mode=ParseMode.HTML
+                )
+                return CLAIM_CONFIRM
+            else:
+                # Invalid photo, ask again
+                update.message.reply_text(
+                    result['message'],
+                    reply_markup=KeyboardBuilder.cancel_keyboard(),
+                    parse_mode=ParseMode.HTML
+                )
+                return CLAIM_PHOTO
+                
+        except Exception as e:
+            # Delete the "uploading" message in case of error
+            self._delete_processing_message(uploading_message)
+            
+            logger.error(f"Error processing photo upload for user {user_id}: {e}")
             update.message.reply_text(
-                result['message'],
-                reply_markup=KeyboardBuilder.confirmation_keyboard()
-            )
-            return CLAIM_CONFIRM
-        else:
-            # Invalid photo, ask again
-            update.message.reply_text(
-                result['message'],
+                "❌ 照片上传失败，请重新尝试上传收据照片",
                 reply_markup=KeyboardBuilder.cancel_keyboard()
             )
             return CLAIM_PHOTO
@@ -664,6 +741,11 @@ class TelegramBot:
         
         logger.info(f"User {user_id} claim confirmation: {confirm_data}")
         
+        # Only show processing message for "Yes" confirmation
+        if confirm_data == "confirm_yes":
+            # Show "submitting" message to provide user feedback
+            self._send_processing_message(query, 'submit')
+        
         # Get claim data from context
         claim_data = context.user_data.get('claim_data', {})
         
@@ -672,7 +754,8 @@ class TelegramBot:
         
         query.edit_message_text(
             result['message'],
-            reply_markup=KeyboardBuilder.start_claim_keyboard() if result['success'] else KeyboardBuilder.confirmation_keyboard()
+            reply_markup=KeyboardBuilder.start_claim_keyboard() if result['success'] else KeyboardBuilder.confirmation_keyboard(),
+            parse_mode=ParseMode.HTML
         )
         
         # Clear context data
@@ -917,16 +1000,23 @@ class TelegramBot:
         dayoff_type = context.user_data.get('dayoff_type')
         dayoff_date = context.user_data.get('dayoff_date')
         
+        # Send "submitting" message to provide user feedback
+        submitting_message = self._send_processing_message(update, 'dayoff_submit')
+        
         success = self.dayoff_manager.save_dayoff_request(user_id, dayoff_type, dayoff_date, reason)
         
+        # Delete the "submitting" message
+        self._delete_processing_message(submitting_message)
+        
         if success:
-            message = "✅ Day-off request submitted successfully!\n\nYour request is pending review."
+            message = "✅ <b>Day-off request submitted successfully!</b>\n\nYour request is pending review."
         else:
             message = "❌ Failed to submit day-off request. Please try again later."
         
         update.message.reply_text(
             message,
-            reply_markup=KeyboardBuilder.universal_start_keyboard()
+            reply_markup=KeyboardBuilder.universal_start_keyboard(),
+            parse_mode=ParseMode.HTML
         )
         
         context.user_data.clear()
