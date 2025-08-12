@@ -121,10 +121,10 @@ class TelegramBot:
         """
         # Default messages for different operation types
         default_messages = {
-            'upload': "📤 <b>上传中...</b>\n\n正在处理您的收据照片，请稍候...\n⏳ <i>请不要点击其他按钮</i>",
-            'save': "💾 <b>保存中...</b>\n\n正在保存您的信息到系统...\n⏳ <i>请稍候，不要点击其他按钮</i>",
-            'submit': "📋 <b>提交中...</b>\n\n正在提交您的申请到系统...\n⏳ <i>请稍候，不要点击其他按钮</i>",
-            'dayoff_submit': "📅 <b>提交中...</b>\n\n正在提交您的请假申请到系统...\n⏳ <i>请稍候，不要点击其他按钮</i>"
+            'upload': "📤 <b>Uploading...</b>\n\nProcessing your receipt photo, please wait...\n⏳ <i>Please do not click other buttons</i>",
+            'save': "💾 <b>Saving...</b>\n\nSaving your information to the system...\n⏳ <i>Please wait, do not click other buttons</i>",
+            'submit': "📋 <b>Submitting...</b>\n\nSubmitting your request to the system...\n⏳ <i>Please wait, do not click other buttons</i>",
+            'dayoff_submit': "📅 <b>Submitting...</b>\n\nSubmitting your day-off request to the system...\n⏳ <i>Please wait, do not click other buttons</i>"
         }
         
         message_text = custom_message or default_messages.get(message_type, default_messages['submit'])
@@ -726,7 +726,7 @@ class TelegramBot:
             
             logger.error(f"Error processing photo upload for user {user_id}: {e}")
             update.message.reply_text(
-                "❌ 照片上传失败，请重新尝试上传收据照片",
+                "❌ Photo upload failed, please try uploading the receipt photo again",
                 reply_markup=KeyboardBuilder.cancel_keyboard()
             )
             return CLAIM_PHOTO
