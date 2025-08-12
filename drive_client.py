@@ -1,400 +1,522 @@
 """
-Global Error Handler for Telegram Claim Bot
-
-This module provides comprehensive error handling, retry mechanisms,
-and user-friendly error messages for the entire application.
+Google Drive Client for Telegram Claim Bot
+Handles file uploads, folder management, and shareable link generation
+for receipt photos organized by category and date.
 """
-
 import asyncio
-import logging
-import traceback
-from datetime import datetime, timedelta
-from typing import Dict, Any, Optional, Callable, Tuple
-from functools import wraps
-from enum import Enum
-
-from telegram import Update
-from telegram.error import TelegramError, NetworkError, TimedOut, BadRequest
+import json
+import io
+from datetime import datetime
+from typing import Dict, List, Optional, Any
+from google.oauth2.credentials import Credentials
+from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
-from google.auth.exceptions import GoogleAuthError
+from googleapiclient.http import MediaIoBaseUpload
+import logging
 
 logger = logging.getLogger(__name__)
 
-
-class ErrorType(Enum):
-    """Types of errors that can occur in the system"""
-    TELEGRAM_API = "telegram_api"
-    GOOGLE_API = "google_api"
-    VALIDATION = "validation"
-    NETWORK = "network"
-    AUTHENTICATION = "authentication"
-    RATE_LIMIT = "rate_limit"
-    UNKNOWN = "unknown"
-
-
-class ErrorSeverity(Enum):
-    """Severity levels for errors"""
-    LOW = "low"
-    MEDIUM = "medium"
-    HIGH = "high"
-    CRITICAL = "critical"
-
-
-class RetryConfig:
-    """Configuration for retry mechanisms"""
+class DriveClient:
+    """Client for Google Drive API operations"""
     
-    def __init__(self, max_attempts: int = 3, base_delay: float = 1.0, 
-                 max_delay: float = 60.0, exponential_base: float = 2.0):
-        self.max_attempts = max_attempts
-        self.base_delay = base_delay
-        self.max_delay = max_delay
-        self.exponential_base = exponential_base
-
-
-class ErrorHandler:
-    """
-    Global error handler with retry mechanisms and user feedback
-    """
-    
-    def __init__(self):
-        self.error_counts = {}  # Track error frequencies
-        self.last_errors = {}   # Track last error times for rate limiting
-        self.retry_configs = self._setup_retry_configs()
-        
-        logger.info("ErrorHandler initialized")
-    
-    def _setup_retry_configs(self) -> Dict[ErrorType, RetryConfig]:
-        """Setup retry configurations for different error types"""
-        return {
-            ErrorType.TELEGRAM_API: RetryConfig(max_attempts=3, base_delay=1.0),
-            ErrorType.GOOGLE_API: RetryConfig(max_attempts=5, base_delay=2.0),
-            ErrorType.NETWORK: RetryConfig(max_attempts=3, base_delay=1.0),
-            ErrorType.RATE_LIMIT: RetryConfig(max_attempts=5, base_delay=5.0, max_delay=300.0),
-            ErrorType.AUTHENTICATION: RetryConfig(max_attempts=2, base_delay=1.0),
-            ErrorType.VALIDATION: RetryConfig(max_attempts=1),  # No retry for validation errors
-            ErrorType.UNKNOWN: RetryConfig(max_attempts=2, base_delay=1.0)
-        }
-    
-    def classify_error(self, error: Exception) -> Tuple[ErrorType, ErrorSeverity]:
+    def __init__(self, root_folder_id: Optional[str] = None):
         """
-        Classify error type and severity
+        Initialize Google Drive client with OAuth credentials
         
         Args:
-            error: Exception to classify
-            
-        Returns:
-            Tuple of (ErrorType, ErrorSeverity)
+            root_folder_id: Optional root folder ID for organizing files
         """
-        # Telegram API errors
-        if isinstance(error, TelegramError):
-            if isinstance(error, (NetworkError, TimedOut)):
-                return ErrorType.NETWORK, ErrorSeverity.MEDIUM
-            elif isinstance(error, BadRequest):
-                return ErrorType.TELEGRAM_API, ErrorSeverity.LOW
-            else:
-                return ErrorType.TELEGRAM_API, ErrorSeverity.MEDIUM
+        self.root_folder_id = root_folder_id
+        self._service = None
+        self._credentials = self._create_oauth_credentials()
+        self._folder_cache = {}  # Cache folder IDs to avoid repeated API calls
         
-        # Google API errors
-        elif isinstance(error, HttpError):
-            status_code = error.resp.status
-            if status_code == 429:  # Rate limit
-                return ErrorType.RATE_LIMIT, ErrorSeverity.HIGH
-            elif status_code in [401, 403]:  # Auth errors
-                return ErrorType.AUTHENTICATION, ErrorSeverity.HIGH
-            elif status_code >= 500:  # Server errors
-                return ErrorType.GOOGLE_API, ErrorSeverity.HIGH
-            else:
-                return ErrorType.GOOGLE_API, ErrorSeverity.MEDIUM
+    def _create_oauth_credentials(self) -> Credentials:
+        """Create Google OAuth 2.0 user credentials from token.json file"""
+        # Define scopes for both Drive and Sheets access
+        scopes = [
+            'https://www.googleapis.com/auth/drive.file',
+            'https://www.googleapis.com/auth/spreadsheets'
+        ]
         
-        # Google Auth errors
-        elif isinstance(error, GoogleAuthError):
-            return ErrorType.AUTHENTICATION, ErrorSeverity.CRITICAL
-        
-        # Validation errors
-        elif isinstance(error, ValueError) and "validation" in str(error).lower():
-            return ErrorType.VALIDATION, ErrorSeverity.LOW
-        
-        # Network errors
-        elif isinstance(error, (ConnectionError, TimeoutError)):
-            return ErrorType.NETWORK, ErrorSeverity.MEDIUM
-        
-        # Unknown errors
-        else:
-            return ErrorType.UNKNOWN, ErrorSeverity.MEDIUM
+        try:
+            logger.info("Loading OAuth 2.0 user credentials from token.json")
+            credentials = Credentials.from_authorized_user_file("token.json", scopes)
+            logger.info("Successfully loaded OAuth credentials for Google Drive")
+            return credentials
+        except FileNotFoundError:
+            logger.error("token.json file not found. Make sure GOOGLE_TOKEN_JSON environment variable is set.")
+            raise ValueError("token.json file not found. Check GOOGLE_TOKEN_JSON environment variable.")
+        except Exception as e:
+            logger.error(f"Failed to create OAuth credentials: {e}")
+            raise ValueError(f"Invalid OAuth credentials: {e}")
     
-    def get_user_friendly_message(self, error_type: ErrorType, 
-                                 error_severity: ErrorSeverity, 
-                                 context: str = "") -> str:
-        """
-        Generate user-friendly error message
-        
-        Args:
-            error_type: Type of error
-            error_severity: Severity of error
-            context: Context where error occurred
-            
-        Returns:
-            User-friendly error message in Chinese
-        """
-        base_messages = {
-            ErrorType.TELEGRAM_API: {
-                ErrorSeverity.LOW: "Minor issue with message sending, please try again later.",
-                ErrorSeverity.MEDIUM: "Telegram service temporarily unavailable, please try again later.",
-                ErrorSeverity.HIGH: "Serious problem with Telegram connection, please try again later."
-            },
-            ErrorType.GOOGLE_API: {
-                ErrorSeverity.LOW: "Minor issue saving data, please try again.",
-                ErrorSeverity.MEDIUM: "Google service temporarily unavailable, please try again later.",
-                ErrorSeverity.HIGH: "Problem with Google service, please try again later."
-            },
-            ErrorType.NETWORK: {
-                ErrorSeverity.LOW: "Network connection unstable, please try again.",
-                ErrorSeverity.MEDIUM: "Network connection problem, please check network and try again.",
-                ErrorSeverity.HIGH: "Serious network connection issue, please try again later."
-            },
-            ErrorType.RATE_LIMIT: {
-                ErrorSeverity.MEDIUM: "Too many requests, please wait a moment and try again.",
-                ErrorSeverity.HIGH: "System busy, please wait a few minutes and try again."
-            },
-            ErrorType.AUTHENTICATION: {
-                ErrorSeverity.HIGH: "System authentication problem, please contact administrator.",
-                ErrorSeverity.CRITICAL: "System authentication failed, please contact administrator."
-            },
-            ErrorType.VALIDATION: {
-                ErrorSeverity.LOW: "Input information format incorrect, please check and try again."
-            },
-            ErrorType.UNKNOWN: {
-                ErrorSeverity.LOW: "Unknown error occurred, please try again.",
-                ErrorSeverity.MEDIUM: "System problem occurred, please try again later.",
-                ErrorSeverity.HIGH: "Serious system problem, please contact administrator."
-            }
-        }
-        
-        # Get base message
-        type_messages = base_messages.get(error_type, base_messages[ErrorType.UNKNOWN])
-        message = type_messages.get(error_severity, type_messages.get(ErrorSeverity.MEDIUM, "System problem occurred, please try again later."))
-        
-        # Add context-specific information
-        if context:
-            context_messages = {
-                "registration": "during registration",
-                "claim_submission": "when submitting claim",
-                "photo_upload": "when uploading photo",
-                "data_save": "when saving data",
-                "user_lookup": "when looking up user information"
-            }
-            
-            if context in context_messages:
-                message = f"{context_messages[context]}{message}"
-        
-        return f"❌ {message}"
-    
-    async def handle_error_with_retry(self, func: Callable, *args, 
-                                    error_context: str = "", 
-                                    user_id: Optional[int] = None, **kwargs) -> Tuple[bool, Any, Optional[str]]:
-        """
-        Execute function with automatic retry on failure
-        
-        Args:
-            func: Function to execute
-            *args: Function arguments
-            error_context: Context description for error messages
-            user_id: User ID for error tracking
-            **kwargs: Function keyword arguments
-            
-        Returns:
-            Tuple of (success, result, error_message)
-        """
-        last_error = None
-        
-        for attempt in range(3):  # Default max attempts
+    def _get_service(self):
+        """Get or create Google Drive service instance"""
+        if self._service is None:
             try:
-                if asyncio.iscoroutinefunction(func):
-                    result = await func(*args, **kwargs)
-                else:
-                    result = func(*args, **kwargs)
-                
-                # Success - reset error count for this context
-                if user_id and error_context:
-                    error_key = f"{user_id}_{error_context}"
-                    self.error_counts.pop(error_key, None)
-                
-                return True, result, None
-                
-            except Exception as error:
-                last_error = error
-                error_type, error_severity = self.classify_error(error)
-                
-                # Log the error
-                logger.error(f"Attempt {attempt + 1} failed in {error_context}: {error}")
-                
-                # Track error frequency
-                if user_id:
-                    error_key = f"{user_id}_{error_context}"
-                    self.error_counts[error_key] = self.error_counts.get(error_key, 0) + 1
-                
-                # Check if we should retry
-                if not self._should_retry(error_type, attempt + 1):
-                    break
-                
-                # Calculate delay for next attempt
-                delay = self._calculate_retry_delay(error_type, attempt)
-                if delay > 0:
-                    await asyncio.sleep(delay)
-        
-        # All attempts failed
-        if last_error:
-            error_type, error_severity = self.classify_error(last_error)
-            user_message = self.get_user_friendly_message(error_type, error_severity, error_context)
-            
-            # Log final failure
-            logger.error(f"All retry attempts failed for {error_context}: {last_error}")
-            logger.error(f"Traceback: {traceback.format_exc()}")
-            
-            return False, None, user_message
-        
-        return False, None, "❌ Operation failed, please try again later."
+                self._service = build('drive', 'v3', credentials=self._credentials)
+            except Exception as e:
+                logger.error(f"Failed to build Google Drive service: {e}")
+                raise
+        return self._service
     
-    def _should_retry(self, error_type: ErrorType, attempt: int) -> bool:
-        """Determine if error should be retried"""
-        config = self.retry_configs.get(error_type, self.retry_configs[ErrorType.UNKNOWN])
-        
-        # Don't retry validation errors
-        if error_type == ErrorType.VALIDATION:
-            return False
-        
-        # Don't retry if max attempts reached
-        if attempt >= config.max_attempts:
-            return False
-        
-        return True
-    
-    def _calculate_retry_delay(self, error_type: ErrorType, attempt: int) -> float:
-        """Calculate delay before next retry attempt"""
-        config = self.retry_configs.get(error_type, self.retry_configs[ErrorType.UNKNOWN])
-        
-        # Exponential backoff
-        delay = config.base_delay * (config.exponential_base ** attempt)
-        
-        # Cap at max delay
-        delay = min(delay, config.max_delay)
-        
-        return delay
-    
-    def log_error_details(self, error: Exception, context: str, user_id: Optional[int] = None):
+    def generate_folder_path(self, category: str, date: str) -> str:
         """
-        Log detailed error information for debugging
+        Generate folder path based on category and date
         
         Args:
-            error: Exception that occurred
-            context: Context where error occurred
-            user_id: Optional user ID
-        """
-        error_type, error_severity = self.classify_error(error)
-        
-        error_details = {
-            'timestamp': datetime.now().isoformat(),
-            'error_type': error_type.value,
-            'error_severity': error_severity.value,
-            'context': context,
-            'user_id': user_id,
-            'error_message': str(error),
-            'error_class': error.__class__.__name__,
-            'traceback': traceback.format_exc()
-        }
-        
-        # Log based on severity
-        if error_severity in [ErrorSeverity.HIGH, ErrorSeverity.CRITICAL]:
-            logger.critical(f"Critical error in {context}: {error_details}")
-        elif error_severity == ErrorSeverity.MEDIUM:
-            logger.error(f"Error in {context}: {error_details}")
-        else:
-            logger.warning(f"Minor error in {context}: {error_details}")
-    
-    def reset_user_error_state(self, user_id: int):
-        """
-        Reset error state for a user (useful after successful operations)
-        
-        Args:
-            user_id: User ID to reset
-        """
-        keys_to_remove = [key for key in self.error_counts.keys() if key.startswith(f"{user_id}_")]
-        for key in keys_to_remove:
-            self.error_counts.pop(key, None)
-        
-        logger.debug(f"Reset error state for user {user_id}")
-    
-    def get_error_statistics(self) -> Dict[str, Any]:
-        """
-        Get error statistics for monitoring
-        
+            category: Expense category (Food, Transportation, etc.)
+            date: Date string in YYYY-MM-DD format
+            
         Returns:
-            Dictionary with error statistics
+            str: Folder path in format "Category/YYYY-MM-DD"
         """
-        total_errors = sum(self.error_counts.values())
-        
-        # Group by error type
-        type_counts = {}
-        for key, count in self.error_counts.items():
-            # Extract context from key (format: userid_context)
-            if '_' in key:
-                context = key.split('_', 1)[1]
-                type_counts[context] = type_counts.get(context, 0) + count
-        
-        return {
-            'total_errors': total_errors,
-            'error_by_context': type_counts,
-            'active_error_keys': len(self.error_counts),
-            'timestamp': datetime.now().isoformat()
-        }
-
-
-def with_error_handling(context: str = "", reset_state_on_success: bool = True):
-    """
-    Decorator for automatic error handling with retry
+        try:
+            # Parse date to ensure proper format
+            if isinstance(date, str):
+                date_obj = datetime.fromisoformat(date.replace('Z', '+00:00'))
+            else:
+                date_obj = date
+            
+            date_str = date_obj.strftime('%Y-%m-%d')
+            return f"{category}/{date_str}"
+            
+        except Exception as e:
+            logger.error(f"Error generating folder path: {e}")
+            # Fallback to current date
+            current_date = datetime.now().strftime('%Y-%m-%d')
+            return f"{category}/{current_date}"
     
-    Args:
-        context: Context description for error messages
-        reset_state_on_success: Whether to reset error state on success
-    """
-    def decorator(func):
-        @wraps(func)
-        async def wrapper(*args, **kwargs):
-            # Try to extract user_id from arguments
-            user_id = None
-            if args and hasattr(args[0], '__dict__'):
-                # Look for user_id in first argument (usually self)
-                for arg in args[1:]:  # Skip self
-                    if isinstance(arg, int) and arg > 0:
-                        user_id = arg
-                        break
+    async def create_folder_if_not_exists(self, folder_path: str) -> str:
+        """
+        Create folder structure if it doesn't exist
+        
+        Args:
+            folder_path: Path like "Category/YYYY-MM-DD"
             
-            # Get error handler instance (assuming it's available globally)
-            error_handler = getattr(args[0], 'error_handler', None) if args else None
+        Returns:
+            str: Folder ID of the final folder
+        """
+        try:
+            loop = asyncio.get_event_loop()
+            return await loop.run_in_executor(
+                None, self._create_folder_sync, folder_path
+            )
+        except Exception as e:
+            logger.error(f"Failed to create folder {folder_path}: {e}")
+            raise
+    
+    def _create_folder_sync(self, folder_path: str) -> str:
+        """Synchronous folder creation"""
+        service = self._get_service()
+        
+        # Check cache first
+        if folder_path in self._folder_cache:
+            return self._folder_cache[folder_path]
+        
+        try:
+            # If no root folder specified, return None to upload to accessible location
+            if not self.root_folder_id:
+                logger.warning("No root folder specified, files will be uploaded to default location")
+                return None
             
-            if not error_handler:
-                # Fallback to direct execution if no error handler available
-                try:
-                    return await func(*args, **kwargs)
-                except Exception as e:
-                    logger.error(f"Error in {func.__name__}: {e}")
-                    raise
+            # Split path into components
+            path_parts = folder_path.split('/')
+            current_parent_id = self.root_folder_id
             
-            success, result, error_message = await error_handler.handle_error_with_retry(
-                func, *args, error_context=context or func.__name__, user_id=user_id, **kwargs
+            for part in path_parts:
+                if not part:  # Skip empty parts
+                    continue
+                
+                # Check if folder exists
+                folder_id = self._find_folder_by_name(part, current_parent_id)
+                
+                if folder_id:
+                    current_parent_id = folder_id
+                else:
+                    # Create folder
+                    folder_metadata = {
+                        'name': part,
+                        'mimeType': 'application/vnd.google-apps.folder'
+                    }
+                    
+                    if current_parent_id:
+                        folder_metadata['parents'] = [current_parent_id]
+                    
+                    try:
+                        folder = service.files().create(
+                            body=folder_metadata,
+                            fields='id'
+                        ).execute()
+                        
+                        current_parent_id = folder.get('id')
+                        logger.info(f"Created folder '{part}' with ID: {current_parent_id}")
+                    except HttpError as folder_error:
+                        if folder_error.resp.status == 403:
+                            logger.warning(f"Cannot create folder '{part}', using parent folder instead")
+                            # Use parent folder if can't create subfolder
+                            break
+                        else:
+                            raise
+            
+            # Cache the result
+            self._folder_cache[folder_path] = current_parent_id
+            return current_parent_id
+            
+        except HttpError as e:
+            logger.error(f"HTTP error creating folder {folder_path}: {e}")
+            # Return root folder as fallback
+            return self.root_folder_id
+        except Exception as e:
+            logger.error(f"Unexpected error creating folder {folder_path}: {e}")
+            # Return root folder as fallback
+            return self.root_folder_id
+    
+    def _find_folder_by_name(self, name: str, parent_id: Optional[str] = None) -> Optional[str]:
+        """Find folder by name within parent folder"""
+        service = self._get_service()
+        
+        try:
+            query = f"name='{name}' and mimeType='application/vnd.google-apps.folder' and trashed=false"
+            if parent_id:
+                query += f" and '{parent_id}' in parents"
+            
+            results = service.files().list(
+                q=query,
+                fields='files(id, name)'
+            ).execute()
+            
+            files = results.get('files', [])
+            if files:
+                return files[0]['id']
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error finding folder {name}: {e}")
+            return None   
+ 
+    async def upload_photo(self, photo_data: bytes, filename: str, folder_id: str) -> str:
+        """
+        Upload photo to Google Drive
+        
+        Args:
+            photo_data: Photo data as bytes
+            filename: Name for the uploaded file
+            folder_id: ID of the folder to upload to
+            
+        Returns:
+            str: File ID of uploaded photo
+        """
+        try:
+            loop = asyncio.get_event_loop()
+            return await loop.run_in_executor(
+                None, self._upload_photo_sync, photo_data, filename, folder_id
+            )
+        except Exception as e:
+            logger.error(f"Failed to upload photo {filename}: {e}")
+            raise
+    
+    def _upload_photo_sync(self, photo_data: bytes, filename: str, folder_id: str) -> str:
+        """Synchronous photo upload to shared folder with memory optimization"""
+        service = self._get_service()
+        media_stream = None
+        
+        try:
+            # Create file metadata
+            file_metadata = {
+                'name': filename
+            }
+            
+            # Always upload to the specified shared folder (user's personal Drive)
+            target_folder_id = folder_id or self.root_folder_id
+            
+            if not target_folder_id:
+                raise ValueError("No target folder specified. Please set GOOGLE_DRIVE_FOLDER_ID environment variable.")
+            
+            file_metadata['parents'] = [target_folder_id]
+            
+            logger.debug(f"Uploading {filename} ({len(photo_data)} bytes) to folder {target_folder_id}")
+            
+            # Create media upload object with explicit stream management
+            media_stream = io.BytesIO(photo_data)
+            media = MediaIoBaseUpload(
+                media_stream,
+                mimetype='image/jpeg',
+                resumable=False  # Changed to False to avoid keeping upload buffers
             )
             
-            if success:
-                if reset_state_on_success and user_id:
-                    error_handler.reset_user_error_state(user_id)
-                return result
+            # Upload file
+            file = service.files().create(
+                body=file_metadata,
+                media_body=media,
+                fields='id'
+            ).execute()
+            
+            file_id = file.get('id')
+            logger.debug(f"Uploaded photo {filename} with ID: {file_id}")
+            
+            # Set file permissions
+            try:
+                permission = {
+                    'role': 'reader',
+                    'type': 'anyone'
+                }
+                service.permissions().create(
+                    fileId=file_id,
+                    body=permission
+                ).execute()
+                logger.debug(f"Set public read permissions for file {file_id}")
+            except HttpError as perm_error:
+                logger.warning(f"Could not set public permissions for file {file_id}: {perm_error}")
+            
+            # Release memory immediately after successful upload to reduce memory usage
+            if media_stream is not None:
+                media_stream.close()
+                del media_stream
+                import gc
+                gc.collect()
+                logger.info("[MEMORY] Released file_data after successful Drive upload")
+            
+            return file_id
+            
+        except HttpError as e:
+            logger.error(f"HTTP error uploading photo {filename}: {e}")
+            # Provide more specific error messages based on the error type
+            if e.resp.status == 403:
+                if 'storageQuotaExceeded' in str(e):
+                    if 'Service Accounts do not have storage quota' in str(e):
+                        error_msg = (
+                            f"Service Account has no storage quota. Current settings:\n"
+                            f"- Target folder: {target_folder_id}\n"
+                            f"- Service Account: telegram-bot-service@pryme-468004.iam.gserviceaccount.com\n"
+                            f"Please confirm the folder is properly shared with the Service Account with editor permissions."
+                        )
+                    else:
+                        error_msg = (
+                            f"Storage quota exceeded. Solutions:\n"
+                            f"1. Ensure folder {target_folder_id} belongs to a user account with storage space\n"
+                            f"2. The folder needs to be shared with Service Account with edit permissions\n"
+                            f"3. Check if the folder owner's Google Drive storage space is sufficient"
+                        )
+                elif 'insufficientFilePermissions' in str(e):
+                    error_msg = (
+                        f"Insufficient permissions. Solutions:\n"
+                        f"1. Please share folder {target_folder_id} with Service Account email\n"
+                        f"2. Ensure 'Editor' permissions are granted\n"
+                        f"3. Service Account email can be found in Google Cloud Console"
+                    )
+                else:
+                    error_msg = f"Access denied (HTTP 403). Please check permissions for folder {target_folder_id}."
+                logger.error(error_msg)
+                raise ValueError(error_msg)
+            elif e.resp.status == 404:
+                error_msg = (
+                    f"Folder does not exist or is inaccessible (HTTP 404). Solutions:\n"
+                    f"1. Check if GOOGLE_DRIVE_FOLDER_ID is correct: {target_folder_id}\n"
+                    f"2. Ensure the folder is shared with Service Account\n"
+                    f"3. Folder ID can be obtained from Google Drive URL"
+                )
+                logger.error(error_msg)
+                raise ValueError(error_msg)
             else:
-                # Create a custom exception with user-friendly message
-                raise RuntimeError(error_message or "Operation failed")
+                logger.error(f"Google Drive API error (HTTP {e.resp.status}): {e}")
+                raise
+        except Exception as e:
+            logger.error(f"Unexpected error uploading photo {filename}: {e}")
+            raise
+        finally:
+            # Fallback low-frequency timed GC (every 15 minutes) to prevent small object accumulation
+            # Note: Implement a background task in __init__ for timed GC
+            pass  # Placeholder; actual implementation in class init
+    
+    async def get_shareable_link(self, file_id: str) -> str:
+        """
+        Generate shareable link for a file
         
-        return wrapper
-    return decorator
-
-
-# Global error handler instance
-global_error_handler = ErrorHandler()
+        Args:
+            file_id: Google Drive file ID
+            
+        Returns:
+            str: Shareable link URL
+        """
+        try:
+            loop = asyncio.get_event_loop()
+            return await loop.run_in_executor(
+                None, self._get_shareable_link_sync, file_id
+            )
+        except Exception as e:
+            logger.error(f"Failed to get shareable link for {file_id}: {e}")
+            raise
+    
+    def _get_shareable_link_sync(self, file_id: str) -> str:
+        """Synchronous shareable link generation"""
+        service = self._get_service()
+        
+        try:
+            # Make file publicly viewable
+            permission = {
+                'role': 'reader',
+                'type': 'anyone'
+            }
+            
+            service.permissions().create(
+                fileId=file_id,
+                body=permission
+            ).execute()
+            
+            # Get file info to construct shareable link
+            file_info = service.files().get(
+                fileId=file_id,
+                fields='webViewLink'
+            ).execute()
+            
+            shareable_link = file_info.get('webViewLink')
+            logger.info(f"Generated shareable link for file {file_id}")
+            return shareable_link
+            
+        except HttpError as e:
+            logger.error(f"HTTP error getting shareable link for {file_id}: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"Unexpected error getting shareable link for {file_id}: {e}")
+            raise
+    
+    async def upload_receipt_with_organization(self, photo_data: bytes, category: str, 
+                                            user_id: int, timestamp: Optional[datetime] = None) -> str:
+        """
+        Upload receipt photo with automatic folder organization
+        
+        Args:
+            photo_data: Photo data as bytes
+            category: Expense category
+            user_id: Telegram user ID for filename
+            timestamp: Optional timestamp, defaults to current time
+            
+        Returns:
+            str: Shareable link to the uploaded photo
+        """
+        try:
+            if timestamp is None:
+                timestamp = datetime.now()
+            
+            # Generate filename with category and timestamp info
+            filename = f"receipt_{user_id}_{category}_{timestamp.strftime('%Y%m%d_%H%M%S')}.jpg"
+            
+            # Try to upload with folder organization first
+            try:
+                # Generate folder path
+                folder_path = self.generate_folder_path(category, timestamp.isoformat())
+                
+                # Create folder structure
+                folder_id = await self.create_folder_if_not_exists(folder_path)
+                
+                # Upload photo
+                file_id = await self.upload_photo(photo_data, filename, folder_id)
+                
+            except HttpError as e:
+                if e.resp.status == 403 and 'storageQuotaExceeded' in str(e):
+                    logger.warning(f"Storage quota exceeded, uploading to root folder for user {user_id}")
+                    # Fallback: upload directly to root folder without organization
+                    file_id = await self.upload_photo(photo_data, filename, self.root_folder_id)
+                else:
+                    raise
+            
+            # Generate shareable link
+            shareable_link = await self.get_shareable_link(file_id)
+            
+            logger.info(f"Successfully uploaded receipt for user {user_id} in category {category}")
+            return shareable_link
+            
+        except Exception as e:
+            logger.error(f"Failed to upload receipt with organization: {e}")
+            raise
+    
+    async def validate_drive_access(self) -> bool:
+        """
+        Validate that the client can access Google Drive
+        
+        Returns:
+            bool: True if Drive is accessible
+        """
+        try:
+            loop = asyncio.get_event_loop()
+            return await loop.run_in_executor(
+                None, self._validate_access_sync
+            )
+        except Exception as e:
+            logger.error(f"Failed to validate Drive access: {e}")
+            return False
+    
+    def _validate_access_sync(self) -> bool:
+        """Synchronous access validation"""
+        try:
+            service = self._get_service()
+            
+            # Try to get information about the root folder or user's Drive
+            if self.root_folder_id:
+                file_info = service.files().get(
+                    fileId=self.root_folder_id,
+                    fields='id,name'
+                ).execute()
+                logger.info(f"Successfully accessed root folder: {file_info.get('name', 'Unknown')}")
+            else:
+                # Test basic Drive access
+                results = service.files().list(
+                    pageSize=1,
+                    fields='files(id,name)'
+                ).execute()
+                logger.info("Successfully accessed Google Drive")
+            
+            return True
+            
+        except HttpError as e:
+            logger.error(f"HTTP error validating Drive access: {e}")
+            return False
+        except Exception as e:
+            logger.error(f"Unexpected error validating Drive access: {e}")
+            return False
+    
+    async def list_files_in_folder(self, folder_id: str, limit: int = 10) -> List[Dict[str, Any]]:
+        """
+        List files in a specific folder
+        
+        Args:
+            folder_id: Google Drive folder ID
+            limit: Maximum number of files to return
+            
+        Returns:
+            List of file information dictionaries
+        """
+        try:
+            loop = asyncio.get_event_loop()
+            return await loop.run_in_executor(
+                None, self._list_files_sync, folder_id, limit
+            )
+        except Exception as e:
+            logger.error(f"Failed to list files in folder {folder_id}: {e}")
+            raise
+    
+    def _list_files_sync(self, folder_id: str, limit: int) -> List[Dict[str, Any]]:
+        """Synchronous file listing"""
+        service = self._get_service()
+        
+        try:
+            query = f"'{folder_id}' in parents and trashed=false"
+            
+            results = service.files().list(
+                q=query,
+                pageSize=limit,
+                fields='files(id,name,createdTime,size,webViewLink)'
+            ).execute()
+            
+            files = results.get('files', [])
+            return files
+            
+        except HttpError as e:
+            logger.error(f"HTTP error listing files in folder {folder_id}: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"Unexpected error listing files in folder {folder_id}: {e}")
+            raise
