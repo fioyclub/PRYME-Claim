@@ -169,8 +169,7 @@ def initialize_bot():
             token=config.TELEGRAM_BOT_TOKEN,
             user_manager=user_manager,
             claims_manager=claims_manager,
-            dayoff_manager=dayoff_manager,
-            config=config
+            dayoff_manager=dayoff_manager
         )
         
         # Note: ConversationHandler state is maintained in-memory and is not shared between workers
