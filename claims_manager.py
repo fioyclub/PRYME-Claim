@@ -605,33 +605,18 @@ class ClaimsManager:
             List of user's claims
         """
         try:
-            # Get user's role to determine which worksheet to search
-            user_role = self._get_user_role(user_id)
-            user_name = self._get_user_name(user_id)
+            # Get all claims and filter by user
+            # For now, return empty list (can be enhanced later with sync method)
+            all_claims = []
             
-            # Get all claims from the role-specific Claims worksheet
-            sheets_client = self.lazy_client_manager.get_sheets_client()
-            worksheet = f"{user_role} Claims"
-            all_claims_data = sheets_client._get_all_claims_sync(worksheet)
-            
-            # Convert raw data to structured format and filter by user name
-            user_claims = []
-            for row in all_claims_data:
-                if len(row) >= 6 and row[4] == user_name:  # row[4] is submitted_by (user name)
-                    claim = {
-                        'date': row[0],
-                        'category': row[1],
-                        'amount': float(row[2]) if row[2] else 0.0,
-                        'receipt_link': row[3],
-                        'submitted_by': row[4],
-                        'status': row[5]
-                    }
-                    user_claims.append(claim)
+            user_claims = [
+                claim for claim in all_claims 
+                if claim.get('submitted_by') == user_id
+            ]
             
             # Sort by date (most recent first) and limit
             user_claims.sort(key=lambda x: x.get('date', ''), reverse=True)
             
-            logger.info(f"Found {len(user_claims)} claims for user {user_id} ({user_name}) in {worksheet}")
             return user_claims[:limit]
             
         except Exception as e:
@@ -684,101 +669,3 @@ class ClaimsManager:
                 message += f"{i}. Claim information format error\n"
         
         return message
-
-    def get_user_claims_summary(self, role: str, user_name: str) -> Dict[str, Any]:
-        """
-        Get summary of user's claims: count, total amount, unique categories.
-        
-        Args:
-            role: User role
-            user_name: User's registered name
-            
-        Returns:
-            Dict with count, total_amount, categories
-        """
-        import gc
-        summary = {'count': 0, 'total_amount': 0.0, 'categories': set()}
-        try:
-            sheets_client = self.lazy_client_manager.get_sheets_client()
-            worksheet = f"{role.capitalize()} Claims"
-            values = sheets_client._get_all_claims_sync(worksheet)  # Assume similar to _get_all_users_sync
-            for row in values:
-                if len(row) > 4 and row[4] == user_name:
-                    summary['count'] += 1
-                    summary['total_amount'] += float(row[2]) if row[2] else 0
-                    summary['categories'].add(row[1])
-            return summary
-        except Exception as e:
-            logger.error(f"Error getting claims summary for {user_name} in {role}: {e}")
-            return summary
-        finally:
-            gc.collect()
-
-    def delete_user_claims(self, role: str, user_name: str) -> bool:
-        """
-        Delete user's claims data and associated photos.
-        
-        Args:
-            role: User role
-            user_name: User's registered name
-            
-        Returns:
-            True if deletion successful
-        """
-        import gc
-        try:
-            sheets_client = self.lazy_client_manager.get_sheets_client()
-            drive_client = self.lazy_client_manager.get_drive_client()
-            worksheet = f"{role.capitalize()} Claims"
-            values = sheets_client._get_all_claims_sync(worksheet)  # This already skips header
-            rows_to_delete = []
-            files_to_delete = []
-            
-            logger.info(f"Found {len(values)} data rows (excluding header) in {worksheet}")
-            
-            for i, row in enumerate(values):
-                if len(row) > 4 and row[4] == user_name:
-                    # Since _get_all_claims_sync already skips header, we need i + 2:
-                    # i is 0-based index in data rows, +1 for header, +1 for 1-based indexing
-                    actual_row_index = i + 2
-                    rows_to_delete.append(actual_row_index)
-                    logger.info(f"Found user claim at data row {i}, actual sheet row {actual_row_index}")
-                    
-                    if len(row) > 3 and row[3]:
-                        file_id = self._extract_file_id(row[3])
-                        if file_id:
-                            files_to_delete.append(file_id)
-            
-            logger.info(f"Will delete {len(rows_to_delete)} rows and {len(files_to_delete)} files for user {user_name}")
-            
-            # Delete files first
-            for file_id in files_to_delete:
-                try:
-                    drive_client._delete_file_sync(file_id)
-                    logger.info(f"Deleted file {file_id}")
-                except Exception as e:
-                    logger.warning(f"Failed to delete file {file_id}: {e}")
-            
-            # Delete rows in reverse order to maintain correct indices
-            for row_idx in sorted(rows_to_delete, reverse=True):
-                try:
-                    sheets_client._delete_row_sync(worksheet, row_idx)
-                    logger.info(f"Deleted row {row_idx} from {worksheet}")
-                except Exception as e:
-                    logger.error(f"Failed to delete row {row_idx}: {e}")
-                    return False
-            
-            logger.info(f"Successfully deleted all claims for user {user_name} in {role}")
-            return True
-            
-        except Exception as e:
-            logger.error(f"Error deleting claims for {user_name} in {role}: {e}")
-            return False
-        finally:
-            gc.collect()
-
-    def _extract_file_id(self, link: str) -> str:
-        """Extract file ID from Google Drive link."""
-        import re
-        match = re.search(r'/d/([a-zA-Z0-9_-]+)', link)
-        return match.group(1) if match else None
