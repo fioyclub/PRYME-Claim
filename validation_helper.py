@@ -99,7 +99,7 @@ class ValidationHelper:
         
         # Add suggestions if available
         if validation_result.suggestions:
-            message += "\n\n💡 建议：\n" + "\n".join(f"• {suggestion}" for suggestion in validation_result.suggestions)
+            message += "\n\n💡 Suggestions:\n" + "\n".join(f"• {suggestion}" for suggestion in validation_result.suggestions)
         
         # Add examples after multiple attempts
         if show_examples and attempt_count >= 2:
@@ -108,7 +108,7 @@ class ValidationHelper:
         
         # Add attempt counter if multiple attempts
         if attempt_count > 1:
-            message += f"\n\n🔄 尝试次数：{attempt_count}/{self.max_attempts}"
+            message += f"\n\n🔄 Attempts: {attempt_count}/{self.max_attempts}"
         
         # Create keyboard with help option
         keyboard = self._create_validation_keyboard(field, attempt_count)
@@ -136,20 +136,20 @@ class ValidationHelper:
         # Always show help button after first attempt
         if attempt_count >= 1:
             help_text = {
-                'name': '👤 姓名格式帮助',
-                'phone': '📱 电话格式帮助',
-                'amount': '💰 金额格式帮助',
-                'photo': '📷 照片格式帮助'
-            }.get(field, '❓ 格式帮助')
+                'name': '👤 Name Format Help',
+                'phone': '📱 Phone Format Help',
+                'amount': '💰 Amount Format Help',
+                'photo': '📷 Photo Format Help'
+            }.get(field, '❓ Format Help')
             
             buttons.append([InlineKeyboardButton(help_text, callback_data=f"help_{field}")])
         
         # Show skip option for non-critical fields after multiple attempts
         if attempt_count >= self.max_attempts and field in ['phone']:  # Only for optional fields
-            buttons.append([InlineKeyboardButton("⏭️ 稍后填写", callback_data=f"skip_{field}")])
+            buttons.append([InlineKeyboardButton("⏭️ Fill Later", callback_data=f"skip_{field}")])
         
         # Always show cancel option
-        buttons.append([InlineKeyboardButton("❌ 取消", callback_data="cancel")])
+        buttons.append([InlineKeyboardButton("❌ Cancel", callback_data="cancel")])
         
         return InlineKeyboardMarkup(buttons)
     
@@ -169,13 +169,13 @@ class ValidationHelper:
         self.reset_validation_attempts(user_id, field)
         
         success_messages = {
-            'name': f'✅ 姓名已确认：{value}',
-            'phone': f'✅ 电话号码已确认：{value}',
-            'amount': f'✅ 金额已确认：{value}',
-            'photo': '✅ 照片已上传成功'
+            'name': f'✅ Name confirmed: {value}',
+            'phone': f'✅ Phone number confirmed: {value}',
+            'amount': f'✅ Amount confirmed: {value}',
+            'photo': '✅ Photo uploaded successfully'
         }
         
-        return success_messages.get(field, f'✅ {field} 已确认')
+        return success_messages.get(field, f'✅ {field} confirmed')
     
     def handle_validation_help_request(self, field: str) -> str:
         """
@@ -191,10 +191,10 @@ class ValidationHelper:
         
         # Add specific tips based on field
         tips = {
-            'name': "\n\n🔧 常见问题：\n• 确保姓名至少2个字符\n• 避免使用数字或特殊符号\n• 可以包含中文、英文和常见标点",
-            'phone': "\n\n🔧 常见问题：\n• 确保包含国家代码或以0开头\n• 检查号码长度是否正确\n• 可以包含空格和连字符",
-            'amount': "\n\n🔧 常见问题：\n• 确保金额大于0\n• 最多2位小数\n• 可以包含RM前缀和千位分隔符",
-            'photo': "\n\n🔧 常见问题：\n• 确保文件是图片格式\n• 检查文件大小不超过10MB\n• 确保图片清晰可见"
+            'name': "\n\n🔧 Common Issues:\n• Ensure name is at least 2 characters\n• Avoid using numbers or special symbols\n• Can include Chinese, English and common punctuation",
+            'phone': "\n\n🔧 Common Issues:\n• Ensure it includes country code or starts with 0\n• Check if number length is correct\n• Can include spaces and hyphens",
+            'amount': "\n\n🔧 Common Issues:\n• Ensure amount is greater than 0\n• Maximum 2 decimal places\n• Can include RM prefix and thousand separators",
+            'photo': "\n\n🔧 Common Issues:\n• Ensure file is in image format\n• Check file size does not exceed 10MB\n• Ensure image is clear and visible"
         }
         
         return help_message + tips.get(field, "")
@@ -211,13 +211,13 @@ class ValidationHelper:
             Retry prompt string
         """
         prompts = {
-            'name': '请重新输入您的真实姓名：',
-            'phone': '请重新输入您的电话号码：',
-            'amount': '请重新输入金额（RM）：',
-            'photo': '请重新上传收据照片：'
+            'name': 'Please re-enter your real name:',
+            'phone': 'Please re-enter your phone number:',
+            'amount': 'Please re-enter amount (RM):',
+            'photo': 'Please re-upload receipt photo:'
         }
         
-        base_prompt = prompts.get(field, f'请重新输入{field}：')
+        base_prompt = prompts.get(field, f'Please re-enter {field}:')
         
         if context:
             return f"{context}\n\n{base_prompt}"
