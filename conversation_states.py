@@ -21,12 +21,3 @@ DAYOFF_DATE = 21
 DAYOFF_START_DATE = 22
 DAYOFF_END_DATE = 23
 DAYOFF_REASON = 24
-
-# Total conversation states
-TOTAL_ROLE = 30
-TOTAL_USER = 31
-TOTAL_CONFIRM = 32
-
-# Deleted conversation states
-DELETED_ROLE = 40
-DELETED_USER = 41
